@@ -72,8 +72,10 @@ class Item:
         self.kind = kind or ("colour" if TYPES.get(key) == "c" else "int" if TYPES.get(key) == "i" else "float")
 
 
-def flag(name, label, help_, invert=False):
-    return Item("flags", label, help_, kind="flag", bit=FLAGS[name], invert=invert)
+def flag(name, label, help_, invert=False, cli=None):
+    it = Item("flags", label, help_, kind="flag", bit=FLAGS[name], invert=invert)
+    it.cli = cli or name
+    return it
 
 
 def is_on(item, values):
@@ -82,7 +84,9 @@ def is_on(item, values):
 
 
 def mode(name, label, help_):
-    return Item("modes", label, help_, kind="mode", bit=MODES[name])
+    it = Item("modes", label, help_, kind="mode", bit=MODES[name])
+    it.cli = "mode_" + name
+    return it
 
 
 GROUPS = [
@@ -176,7 +180,8 @@ GROUPS = [
         flag("boost_without_button", "Only boost while the button is held",
              "Your car boosts only while you hold the boost button. Any boost the button does not back (for "
              "example a boost the game keeps going after a takedown or a Perfect Start) stops at once. Off: "
-             "Revenge's own behaviour (a tap gives a short boost, a Perfect Start boosts on its own).", invert=True),
+             "Revenge's own behaviour (a tap gives a short boost, a Perfect Start boosts on its own).", invert=True,
+             cli="only_boost_while_held"),
         flag("arrows", "Arrows", "Draw the 16 arrows over the bar. Off: no arrows are drawn and none are lit, "
              "so every refill is partial."),
         flag("show_size_label", "Show the x2 - x4 bar-size label", "Revenge's label at the end of the bar. "
@@ -188,8 +193,9 @@ GROUPS = [
              "Revenge also draws the fire on the boost bar while a refill is being animated (after a takedown or "
              "a BURNOUT), even when you are not boosting. Off: the fire shows only while you really boost."),
         flag("debug_boost", "Debug: show stopped boosts",
-             "For testing: a pop-up BOOST STOP: PAD / BOOST STOP: AUTO each time a boost without the button is "
-             "stopped (PAD = while you drive, AUTO = while the game drives, e.g. takedown camera)."),
+             "For testing: pop-ups name every boost the mod stops or refuses. BOOST STOP: TAP END = you let go "
+             "(a tap ends at once); BOOST BLOCKED: GAME START = the game (takedown autopilot) tried to boost without "
+             "your button; BOOST STOP: PAD / AUTO = a boost the button did not back was stopped."),
         Item("lit_rgba", "Lit arrow colour", "Colour of a lit arrow (Dominator: cyan)."),
         Item("dark_rgba", "Unlit arrow colour", "Colour of an unlit arrow."),
         Item("shadow_rgba", "Arrow outline", "Dark outline drawn behind every arrow."),
@@ -198,6 +204,20 @@ GROUPS = [
 ITEMS = [it for _, _, items in GROUPS for it in items]
 SHOWN = {it.key for it in ITEMS}
 HIDDEN = [n for n in DEFAULTS if n not in SHOWN]      # arrow_tex_slot: set from the arrow texture choice
+
+# every on/off switch by its own name (command line --set NAME=on|off, settings list): no bit masks needed
+SWITCHES = {it.cli: it for it in ITEMS if it.kind in ("flag", "mode")}
+ON_WORDS, OFF_WORDS = ("on", "1", "yes", "true"), ("off", "0", "no", "false")
+
+
+def set_switch(values, name, on):
+    """values with switch `name` turned on/off (handles the inverted ones)."""
+    it = SWITCHES[name]
+    bit_set = bool(on) != it.invert
+    v = dict(values)
+    v[it.key] = (v[it.key] | it.bit) if bit_set else (v[it.key] & ~it.bit)
+    return v
+
 
 # ------------------------------------------------------------------------------------------- presets
 PRESET_INFO = {
@@ -355,6 +375,6 @@ def describe(values=None):
     for title, _, items in GROUPS:
         lines.append(title)
         for it in items:
-            raw = it.key if it.kind not in ("flag", "mode") else "%s bit %#x" % (it.key, it.bit)
+            raw = it.key if it.kind not in ("flag", "mode") else "%s=on|off" % it.cli
             lines.append("  %-44s %-14s [%s]" % (it.label, shown(it, values), raw))
     return lines

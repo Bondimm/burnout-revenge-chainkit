@@ -22,10 +22,17 @@ from . import cave, core, settings
 
 
 def _parse_set(items):
+    """--set NAME=VALUE: numbers / colours by setting name, switches by their own name (NAME=on|off)."""
     out = {}
+    switches = []
     for it in items or []:
         k, sep, v = it.partition("=")
         k, v = k.strip(), v.strip()
+        if sep and k in settings.SWITCHES:
+            if v.lower() not in settings.ON_WORDS + settings.OFF_WORDS:
+                raise core.KitError("--set %s: use on or off" % it)
+            switches.append((k, v.lower() in settings.ON_WORDS))
+            continue
         if not sep or k not in settings.TYPES:
             raise core.KitError("--set %s: unknown setting (run 'settings' for the list)" % it)
         t = settings.TYPES[k]
@@ -33,6 +40,8 @@ def _parse_set(items):
             out[k] = (v if t == "c" else int(v, 0) if t == "i" else float(v))
         except ValueError:
             raise core.KitError("--set %s: not a number" % it)
+    if switches:
+        out["__switches__"] = switches
     return out
 
 
@@ -44,7 +53,11 @@ def _values(a, base):
     v = dict(base)
     if a.settings:
         v.update(settings.load(a.settings))
-    v.update(_parse_set(a.set))
+    sets = _parse_set(a.set)
+    switches = sets.pop("__switches__", [])
+    v.update(sets)
+    for name, on in switches:
+        v = settings.set_switch(v, name, on)
     return settings.check(v)
 
 

@@ -15,6 +15,7 @@ PAL_ADDRS = dict(
     # boost class (Revenge FUN_002a3a00 family) and hook return points
     STOP=0x2A4288, STOPREQ=0x2A4180, GROW=0x2A3FA0, SHRINK_ORIG=0x2A3FD0, TICK_ORIG=0x2A2560,
     ADD_RET=0x2A3F10, DRAIN_RET=0x2A3AA8, TAKEDOWN_SKIP=0x114AB8, TINT_RET=0x15E3C0, LABELFN=0x15DB48,
+    START=0x2A4078,                  # FUN_002a4078(boost, controller): start boosting
     HELD=0x1F2220,                   # FUN_001f2220(pad controller): "boost held" (controller+0x1388 bit 1)
     PADVAL=0x111B80,                 # FUN_00111b80(pad): the boost control's value (button / trigger, any scheme)
     # globals
@@ -65,11 +66,11 @@ G_EMPTYW = 0xD0
 MSGBUF = 0x200           # 64 bytes: one-line "BURNOUT! x<N>" (UTF-16)
 ORIGP1 = 0x240           # saved handle of the localized BigMessageBurnoutPart1 text
 LABELBUF = 0x300         # (unused since v5)
-NAMES = 0xEB0            # message names (ASCII; after the mode table)
+NAMES = 0xEF0            # message names (ASCII; after the mode table)
 SCORN = 0x3C0            # shadow quad corners (32 bytes)
 MSGTAB = 0x400           # relocated + extended message table
 MAGIC = b"CHAINKIT"
-VERSION = 5              # 3: per-mode switches, per-action fill factors, label/hint switches; 4: BTN hook;
+VERSION = 6              # 6: autopilot boost start refused; 3: per-mode switches, per-action fill factors, label/hint switches; 4: BTN hook;
                          # 5: button read from the pad, checked every frame
 
 # (name, offset in G_TUNE block, type, default, help)
@@ -86,29 +87,29 @@ TUNABLES = [
     ("flags", 0x24, "i", 0x5F, "bit0 popups, bit1 arrows, bit2 blue tint, bit3 sounds, bit4 slow rule, "
                                 "bit5 no earning while boosting (Dominator), bit6 force the full 400-unit bar, "
                                 "bit7 show Revenge's x2-x4 bar-size label, bit8 show the PRESS R1 TO BOOST hint, "
-                                "bit9 allow boosting without the button held (game boosts; off = only while held), "
+                                "bit9 SET = allow boosting without the button (setting only_boost_while_held = off), "
                                 "bit10 debug pop-ups when a boost without the button is stopped, "
                                 "bit11 bar fire also while the bar fills up (Revenge)"),
     ("arrow_tex_slot", 0x28, "i", 28, "HUD texture slot used for the arrows (28 = TalkIcon -> Boost_Arrow, 12 = chev_sml)"),
     ("fill_mult", 0x2C, "f", 1.15, "boost earned when not supercharged x this (way to the blue bar; 1.0 = Revenge)"),
     ("takedown_grace", 0x248 - G - G_TUNE, "f", 5.0, "seconds after a takedown in which a boost stop (takedown camera) keeps the supercharge"),
-    ("fill_w_oncoming", 0xDC0 - G - G_TUNE, "f", 0.83, "extra factor on the normal bar fill from ONCOMING (full bar ~5 s at 70 m/s)"),
-    ("fill_w_drift", 0xDC4 - G - G_TUNE, "f", 0.40, "extra factor on the normal bar fill from DRIFT (full bar ~4 s at 55 m/s)"),
-    ("fill_w_slam", 0xDC8 - G - G_TUNE, "f", 0.04, "extra factor on the normal bar fill from a SLAM (360 -> ~1/6 of the bar)"),
-    ("fill_w_trading_paint", 0xDCC - G - G_TUNE, "f", 0.05, "extra factor on the normal bar fill from TRADING PAINT"),
-    ("fill_w_rubbing", 0xDD0 - G - G_TUNE, "f", 0.30, "extra factor on the normal bar fill from RUBBING (~20 units/s)"),
-    ("arrows_slam", 0xE08 - G - G_TUNE, "f", 1.0 / 6, "arrows per SLAM while supercharge-boosting (fraction of the arrows)"),
-    ("arrows_takedown", 0xE34 - G - G_TUNE, "f", 1.0, "arrows per TAKEDOWN while supercharged (fraction of the arrows)"),
-    ("modes", 0xE30 - G - G_TUNE, "i", 0xFF, "modes with the mod (bits, see MODES); Crash mode and online are always vanilla"),
+    ("fill_w_oncoming", 0xE00 - G - G_TUNE, "f", 0.83, "extra factor on the normal bar fill from ONCOMING (full bar ~5 s at 70 m/s)"),
+    ("fill_w_drift", 0xE04 - G - G_TUNE, "f", 0.40, "extra factor on the normal bar fill from DRIFT (full bar ~4 s at 55 m/s)"),
+    ("fill_w_slam", 0xE08 - G - G_TUNE, "f", 0.04, "extra factor on the normal bar fill from a SLAM (360 -> ~1/6 of the bar)"),
+    ("fill_w_trading_paint", 0xE0C - G - G_TUNE, "f", 0.05, "extra factor on the normal bar fill from TRADING PAINT"),
+    ("fill_w_rubbing", 0xE10 - G - G_TUNE, "f", 0.30, "extra factor on the normal bar fill from RUBBING (~20 units/s)"),
+    ("arrows_slam", 0xE48 - G - G_TUNE, "f", 1.0 / 6, "arrows per SLAM while supercharge-boosting (fraction of the arrows)"),
+    ("arrows_takedown", 0xE74 - G - G_TUNE, "f", 1.0, "arrows per TAKEDOWN while supercharged (fraction of the arrows)"),
+    ("modes", 0xE70 - G - G_TUNE, "i", 0xFF, "modes with the mod (bits, see MODES); Crash mode and online are always vanilla"),
     ("full_hold_time", 0x2B8 - G - G_TUNE, "f", 0.0, "a bar that becomes full while boosting supercharges after this many seconds (0 = at once)"),
     ("resuper_cooldown", 0x2BC - G - G_TUNE, "f", 3.0, "no new supercharge for this many seconds after one was lost"),
     ("full_threshold", 0x2C0 - G - G_TUNE, "f", 0.98, "the bar counts as full from this fraction of max (boosting drains every frame after the award)"),
-    ("fill_w_air", 0xDD4 - G - G_TUNE, "f", 1.0, "extra factor on the normal bar fill from AIR"),
-    ("fill_w_crash_escape", 0xDD8 - G - G_TUNE, "f", 1.0, "extra factor on the normal bar fill from a CRASH ESCAPE"),
-    ("fill_w_tailgating", 0xDDC - G - G_TUNE, "f", 1.0, "extra factor on the normal bar fill from TAILGATING"),
-    ("fill_w_grinding", 0xDE0 - G - G_TUNE, "f", 1.0, "extra factor on the normal bar fill from GRINDING"),
-    ("fill_w_near_miss", 0xDE4 - G - G_TUNE, "f", 1.0, "extra factor on the normal bar fill from a NEAR MISS"),
-    ("fill_w_checked_traffic", 0xDE8 - G - G_TUNE, "f", 1.0, "extra factor on the normal bar fill from CHECKED TRAFFIC"),
+    ("fill_w_air", 0xE14 - G - G_TUNE, "f", 1.0, "extra factor on the normal bar fill from AIR"),
+    ("fill_w_crash_escape", 0xE18 - G - G_TUNE, "f", 1.0, "extra factor on the normal bar fill from a CRASH ESCAPE"),
+    ("fill_w_tailgating", 0xE1C - G - G_TUNE, "f", 1.0, "extra factor on the normal bar fill from TAILGATING"),
+    ("fill_w_grinding", 0xE20 - G - G_TUNE, "f", 1.0, "extra factor on the normal bar fill from GRINDING"),
+    ("fill_w_near_miss", 0xE24 - G - G_TUNE, "f", 1.0, "extra factor on the normal bar fill from a NEAR MISS"),
+    ("fill_w_checked_traffic", 0xE28 - G - G_TUNE, "f", 1.0, "extra factor on the normal bar fill from CHECKED TRAFFIC"),
     ("shadow_rgba", 0x30, "c", (0.0, 0.0, 0.0, 0.85), "arrow outline/shadow colour (drawn 15% larger behind every arrow)"),
     ("lit_rgba", 0x40, "c", (0.15, 0.85, 1.0, 1.0), "lit arrow colour (Dominator supercharge cyan)"),
     ("dark_rgba", 0x50, "c", (0.05, 0.05, 0.1, 0.55), "unlit arrow colour (dark, translucent)"),
@@ -135,8 +136,8 @@ AWARD_SITES = [(0x2CC4A0, 0), (0x2CC4BC, 0),            # oncoming (FUN_002cc3a0
                (0x2CEDAC, 9),                           # near miss (FUN_002ce9b0)
                (0x2CCD20, 10)]                          # checked traffic (FUN_002cccc8)
 AWARD_KINDS = 11
-AWARD_TABLE, AWARD_FILL, AWARD_ARROWS = 0xD40, 0xDC0, 0xE00
-MODE_TAB = 0xE40             # {u32 mode vtable, u32 mode bit} ..., 0
+AWARD_TABLE, AWARD_FILL, AWARD_ARROWS = 0xD80, 0xE00, 0xE40
+MODE_TAB = 0xE80             # {u32 mode vtable, u32 mode bit} ..., 0
 # Game modes (bit, key, vtables of the mode object at *MODE_OBJ + 0x118). Burning Lap and Preview Lap share one
 # mode class; the event type (10 = Burning Lap) tells them apart. Online modes are always vanilla (bit 8 is never
 # set); Crash mode is recognised by its own flag byte.
@@ -153,6 +154,8 @@ FL_MSG, FL_ARROWS, FL_TINT, FL_SOUND, FL_SLOW, FL_NOEARN, FL_FULLBAR = 1, 2, 4, 
 FL_SHOWLABEL, FL_SHOWHINT, FL_FREEBOOST, FL_DEBUG, FL_FILLFIRE = 128, 256, 512, 1024, 2048
 H_CAR = 0x6CC            # boost-bar HUD element -> its car
 C_PAD = 0x37B0           # car -> pointer to its pad object pointer (human cars)
+BYPAD = 0xF80            # region: 8 bytes, 1 = the running boost has been backed by the button (tap vs game boost)
+BLKT = 0xFA0             # region: 8 floats, race time of the last BOOST BLOCKED debug pop-up
 P_CAR = 0x2E80           # pad controller (FUN_00204ac8's object) -> its car
 # design units of the boost bar sprite (FUN_0015daa0: 290 x 28) and the arrow row
 DESIGN = dict(w=290.0, h=28.0, x0=26.0, dx=15.9, y=14.0, aw=13.0, ah=16.0, n=16.0)
@@ -166,9 +169,11 @@ G_DESIGN = 0xE0  # w,h,x0,dx,y,aw,ah,n (32 bytes, 0xE0..0x100)
 NEW_MESSAGES = [("BlueBoostAvailable", 0x74, 0x03, 0x02), ("Burnout", 0x75, 0x02, 0x03),
                 ("BurnoutLost", 0x76, 0x03, 0xFF), ("BurnoutDomination", 0x77, 0x02, 0x04),
                 ("BurnoutWow", 0x78, 0x02, 0x04),
-                ("DebugBoostPad", 0x79, 0x03, 0x02), ("DebugBoostAuto", 0x7A, 0x03, 0x02)]
+                ("DebugBoostPad", 0x79, 0x03, 0x02), ("DebugBoostAuto", 0x7A, 0x03, 0x02),
+                ("DebugBoostTap", 0x7B, 0x03, 0x02), ("DebugBoostBlock", 0x7C, 0x03, 0x02)]
 HUD_SEGS = 0x6DE         # boost-bar HUD element + 0x6FE (displayed segments), relative to the draw context (+0x20)
 M_SUPER, M_BURNOUT, M_LOST, M_DOMI, M_WOW, M_DBGPAD, M_DBGAUTO = 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A
+M_DBGTAP, M_DBGBLOCK = 0x7B, 0x7C
 
 
 class Layout:
@@ -179,7 +184,8 @@ class Layout:
         self.state, self.g, self.labelbuf, self.msgbuf = R + STATE, R + G, R + LABELBUF, R + MSGBUF
         self.names, self.msgtab, self.code = R + NAMES, R + MSGTAB, a["CODE"]
         self.msg_count = a["MSG_COUNT"] + len(NEW_MESSAGES)
-        assert self.msgtab + 12 * self.msg_count <= self.code
+        assert self.msgtab + 12 * self.msg_count <= R + AWARD_TABLE      # (no overlap with the tables after it)
+        assert BLKT + 32 <= self.code - R
         self.burnout_entry = self.msgtab + 12 * (a["MSG_COUNT"] + 1)   # NEW_MESSAGES[1]
 
     def t(self, pal_addr):
@@ -246,7 +252,7 @@ def build_data(lay, old_table, tunables=None):
         d[p - R:p - R + len(b)] = b
         name_ptr[name] = p
         p += (len(b) + 3) & ~3
-    assert p <= lay.code and lay.names >= R + MODE_TAB + 8 * k + 4 and lay.names >= lay.msgtab + 12 * lay.msg_count
+    assert p <= R + BYPAD and lay.names >= R + MODE_TAB + 8 * k + 4
     assert len(old_table) == 12 * a["MSG_COUNT"]
     t = bytearray(old_table)
     for name, mid, b1, lvl in NEW_MESSAGES:
@@ -285,6 +291,17 @@ class CaveAsm(Asm):
 
     def gflag(self, bit, skip, tmp="t0"):
         self.mem("lw", tmp, self.gaddr(G_TUNE + 0x24), tmp); self.andi(tmp, tmp, bit); self.beqz(tmp, skip); self.nop()
+
+    def bypad(self, car, out):
+        """out = address of the car's 'boost backed by the button' byte (uses t0)."""
+        self.lw(out, C_IDX, car); self.andi(out, out, 7)
+        self.la("t0", self.A["REGION"] + BYPAD); self.addu(out, out, "t0")
+
+    def debug_msg(self, car, mid):
+        skip = self.L("nodbg")
+        self.gflag(FL_DEBUG, skip)
+        self.send_msg(car, mid)
+        self.label(skip)
 
     def gfloat(self, freg, toff):
         self.mem("lwc1", freg, self.gaddr(G_TUNE + toff), "t0")
@@ -577,7 +594,7 @@ def build_code(lay):
     a.label("MC_prev")
     a.li("t3", MB_PREVIEW)
     a.label("MC_mask")
-    a.mem("lw", "t0", A["REGION"] + 0xE30, "t0"); a.andi("t0", "t0", 0xFF)       # online (bit 8) never on
+    a.mem("lw", "t0", A["REGION"] + 0xE70, "t0"); a.andi("t0", "t0", 0xFF)       # online (bit 8) never on
     a.and_("t0", "t0", "t3"); a.sltiu("t0", "t0", 1)
     a.mem("sw", "t0", a.gaddr(G_MODEOFF), "t1")
     a.jr("ra"); a.nop()
@@ -613,13 +630,21 @@ def build_code(lay):
     a.label("T_noreset")
     # boost only while the button is held - also while the pad controller is not asked (takedown camera,
     # autopilot): any boost the player's boost control does not back is stopped every frame
+    # (debug pop-ups: TAP END = the button was let go, AUTO = a boost the button never backed)
     a.mem("lw", "t0", a.gaddr(T + 0x24), "t0"); a.andi("t0", "t0", FL_FREEBOOST); a.bnez("t0", "T_btnok"); a.nop()
-    a.lbu("t1", B_ACTIVE, "s0"); a.beqz("t1", "T_btnok"); a.nop()
+    a.lbu("t1", B_ACTIVE, "s0"); a.bnez("t1", "T_bact"); a.nop()
+    a.bypad("s1", "t6"); a.sb("zero", 0, "t6"); a.b("T_btnok"); a.nop()
+    a.label("T_bact")
     a.move("a0", "s1"); a.jal("PADHELD"); a.nop()
-    a.bnez("v0", "T_btnok"); a.nop()
+    a.beqz("v0", "T_bstop"); a.nop()
+    a.bypad("s1", "t6"); a.li("t1", 1); a.sb("t1", 0, "t6"); a.b("T_btnok"); a.nop()
+    a.label("T_bstop")
     a.move("a0", "s1"); a.jal("BSTOP"); a.nop()
-    a.mem("lw", "t0", a.gaddr(T + 0x24), "t0"); a.andi("t0", "t0", FL_DEBUG); a.beqz("t0", "T_btnok"); a.nop()
-    a.send_msg("s1", M_DBGAUTO)
+    a.bypad("s1", "t6"); a.lbu("t1", 0, "t6"); a.sb("zero", 0, "t6")
+    a.bnez("t1", "T_btap"); a.nop()
+    a.debug_msg("s1", M_DBGAUTO); a.b("T_btnok"); a.nop()
+    a.label("T_btap")
+    a.debug_msg("s1", M_DBGTAP)
     a.label("T_btnok")
     # optional (flag bit6): Dominator's always-full 400-unit bar. Off by default: Revenge's own bar sizes per mode
     # (and the takedown growth / crash shrink) are kept; forcing it made the HUD play 3 segment-gain sounds.
@@ -826,10 +851,11 @@ def build_code(lay):
     a.li("s1", 0)                                                   # forced "held" is not the button
     a.lbu("t1", B_ACTIVE + C_BOOST, "s2"); a.beqz("t1", "B_out"); a.nop()
     a.move("a0", "s2"); a.jal("BSTOP"); a.nop()
-    dbg = a.L("dbg")
-    a.mem("lw", "t0", a.gaddr(T + 0x24), "t0"); a.andi("t0", "t0", FL_DEBUG); a.beqz("t0", dbg); a.nop()
-    a.send_msg("s2", M_DBGPAD)
-    a.label(dbg)
+    a.bypad("s2", "t6"); a.lbu("t1", 0, "t6"); a.sb("zero", 0, "t6")
+    a.bnez("t1", "B_tap"); a.nop()
+    a.debug_msg("s2", M_DBGPAD); a.b("B_out"); a.nop()               # forced "held" (game flag / latch)
+    a.label("B_tap")
+    a.debug_msg("s2", M_DBGTAP)                                      # the player let go (tap end)
     a.label("B_out")
     a.move("v0", "s1")
     a.pop(0x20, RB); a.jr("ra"); a.nop()
@@ -848,6 +874,35 @@ def build_code(lay):
     a.lw("v1", 0x56C, "s0"); a.j(TR(0x161A44)); a.nop()
     a.label("HF_fire")
     a.j(TR(0x1617BC)); a.nop()
+
+    # ---------------------------------------------------------------- ASTART (jal from 0x1DC924 instead of the start)
+    # The game's own driving routine (FUN_001dc2f0) drives the player's car while the race mode's autopilot is on
+    # (car +0x3B28, set by FUN_002cf7a8 from the mode's per-player update FUN_00114760 / FUN_00117aa8 - the
+    # takedown camera) and starts boosts by itself. For a player mod car a start without the boost control
+    # pressed is refused, so not one frame of boost appears. AI cars (controller type != 0) are untouched.
+    a.label("ASTART")
+    a.push(0x20, ["ra", "a0", "a1"])
+    a.lw("t9", B_CAR, "a0"); a.beqz("t9", "AS_go"); a.nop()
+    a.active("t9", "a0", "AS_go")
+    a.mem("lw", "t0", a.gaddr(T + 0x24), "t0"); a.andi("t0", "t0", FL_FREEBOOST); a.bnez("t0", "AS_go"); a.nop()
+    a.move("a0", "t9"); a.jal("PADHELD"); a.nop()
+    a.bnez("v0", "AS_go"); a.nop()
+    a.ld("t9", 8, "sp"); a.lw("t9", B_CAR, "t9")                   # (a0 saved at 8(sp))
+    a.gflag(FL_DEBUG, "AS_no")
+    a.lw("t1", C_IDX, "t9"); a.andi("t1", "t1", 7); a.sll("t1", "t1", 2)
+    a.la("t2", A["REGION"] + BLKT); a.addu("t2", "t2", "t1")
+    a.lwc1("f0", C_TIME, "t9"); a.lwc1("f1", 0, "t2"); a.sub_s("f1", "f0", "f1")
+    a.lif("f2", 2.0); a.c_lt_s("f1", "f2"); a.bc1f("AS_msg"); a.nop()
+    a.mtc1("zero", "f2"); a.nop(); a.c_lt_s("f1", "f2"); a.bc1f("AS_no"); a.nop()   # clock went back: new race
+    a.label("AS_msg")
+    a.swc1("f0", 0, "t2")
+    a.push(0x10, ["s0"]); a.move("s0", "t9")
+    a.send_msg("s0", M_DBGBLOCK)
+    a.pop(0x10, ["s0"])
+    a.label("AS_no")
+    a.pop(0x20, ["ra", "a0", "a1"]); a.jr("ra"); a.li("v0", 0)      # refused: no boost
+    a.label("AS_go")
+    a.pop(0x20, ["ra", "a0", "a1"]); a.j(A["START"]); a.nop()
 
     a.label("RELEASE")
     a.lw("t9", B_CAR, "a0")
@@ -869,7 +924,7 @@ def build_code(lay):
     a.lbu("t1", S_SUPER, "t8"); a.beqz("t1", "K_superon"); a.nop()
     # supercharged: ALL arrows lit; Revenge's takedown refill (amount = max) runs as usual after the return
     a.lwc1("f0", B_MAX, "s0"); a.gfloat("f1", 0x18); a.mul_s("f0", "f0", "f1")        # pool
-    a.mem("lwc1", "f2", A["REGION"] + 0xE34, "t1"); a.mul_s("f2", "f0", "f2")       # x arrows_takedown
+    a.mem("lwc1", "f2", A["REGION"] + 0xE74, "t1"); a.mul_s("f2", "f0", "f2")       # x arrows_takedown
     a.lwc1("f3", S_ARROWS, "t8"); a.add_s("f2", "f2", "f3")
     a.c_lt_s("f0", "f2"); a.bc1f("K_ast"); a.nop(); a.mov_s("f2", "f0")
     a.label("K_ast")
@@ -1032,6 +1087,7 @@ def hooks(lay, labels):
         (0x16D358, 0x45000004, J(L["PROMPT"]), "j PROMPT (no PRESS R1 TO BOOST hint for mod cars)"),
         (0x204E98, JAL(A["STOPREQ"]), JAL(L["RELEASE"]), "jal RELEASE (boost button released, input path 2)"),
         (0x204E4C, JAL(A["HELD"]), JAL(L["BTN"]), "jal BTN (boost only while the button is held)"),
+        (0x1DC924, JAL(A["START"]), JAL(L["ASTART"]), "jal ASTART (autopilot boost start: only with the button)"),
         (0x1617B4, 0x526000A3, J(L["HUDFIRE"]), "j HUDFIRE (bar fire only while boosting; was beql s3,zero)"),
         (0x1617B8, 0x8E03056C, 0x00000000, "nop (the beql delay slot, done in HUDFIRE)"),
         (0x15E3B8, 0x27BDF780, J(L["TINT"]), "j TINT (blue boost bar while supercharged)"),

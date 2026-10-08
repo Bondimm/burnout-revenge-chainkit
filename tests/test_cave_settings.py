@@ -22,7 +22,7 @@ def in_mode(g, vtable, event_type=None):
 
 def modes_game(modes, vtable, event_type=None, **kw):
     g = Game(**kw)
-    g.cpu.m.w32(A["REGION"] + 0xE30, modes)
+    g.cpu.m.w32(A["REGION"] + 0xE70, modes)
     return in_mode(g, vtable, event_type)
 
 
@@ -71,7 +71,7 @@ def test_switched_off_mode_is_vanilla_in_every_hook():
 
 
 def test_mode_object_missing_counts_as_other():
-    g = Game(); g.cpu.m.w32(A["REGION"] + 0xE30, 0xFF & ~mode_bit("other"))
+    g = Game(); g.cpu.m.w32(A["REGION"] + 0xE70, 0xFF & ~mode_bit("other"))
     assert is_vanilla(g)
 
 
@@ -225,14 +225,54 @@ def test_car_without_pad_is_never_stopped():
     assert g.is_boosting() and "stop" not in g.names()
 
 
-def test_debug_popups_name_the_path():
+def test_debug_popups_name_the_reason():
     g = Game(flags=TUNE["flags"] | cave.FL_DEBUG); g.tick(); g.boosting(True)
-    pad(g, held=False)
+    pad(g, held=False, forced=True)                       # Revenge says "held", the button is not
     assert g.msgs() == [cave.M_DBGPAD]
     g.boosting(True); set_pad(g, button=False); g.calls.clear(); g.tick()
-    assert g.msgs() == [cave.M_DBGAUTO]
+    assert g.msgs() == [cave.M_DBGAUTO]                   # a boost the button never backed
     g2 = Game(); g2.tick(); g2.boosting(True); pad(g2, held=False)
     assert g2.msgs() == []                                # off by default
+
+
+def test_tap_ends_at_once_and_says_tap_end():
+    """A tap: the button starts the boost (game path, not touched), letting go ends it at once."""
+    for via_pad_controller in (True, False):
+        g = Game(flags=TUNE["flags"] | cave.FL_DEBUG); g.tick(); g.set_amt(100.0)
+        g.boosting(True); set_pad(g, button=True); g.tick()          # boosting with the button: backed
+        assert g.is_boosting()
+        g.calls.clear()
+        if via_pad_controller:
+            pad(g, held=False)
+        else:
+            set_pad(g, button=False); g.tick()
+        assert not g.is_boosting() and g.msgs() == [cave.M_DBGTAP]
+
+
+def astart(g, button, boost=BOOST):
+    set_pad(g, button)
+    started = []
+    g.cpu.stubs[A["START"]] = lambda cpu: (started.append(cpu.gr(4)), cpu.g.__setitem__(2, 1))
+    g.calls.clear()
+    g.run("ASTART", a0=boost, a1=CTRL)
+    return started
+
+
+def test_autopilot_cannot_start_a_boost_without_the_button():
+    g = Game(flags=TUNE["flags"] | cave.FL_DEBUG); g.tick(); g.set_amt(300.0)
+    assert astart(g, button=False) == [] and g.cpu.gr(2) == 0
+    assert g.msgs() == [cave.M_DBGBLOCK]
+    assert astart(g, button=False) == [] and g.msgs() == []        # pop-up at most every 2 s
+    g.cpu.m.wf32(CAR + cave.C_TIME, g.f(CAR + cave.C_TIME) + 2.5)
+    astart(g, button=False)
+    assert g.msgs() == [cave.M_DBGBLOCK]
+    assert astart(g, button=True) == [BOOST]                       # with the button: the game's start
+
+
+def test_autopilot_start_untouched_for_ai_option_and_crash_mode():
+    for game in (Game(ctrl=1), _crash_game(), Game(flags=TUNE["flags"] | cave.FL_FREEBOOST)):
+        game.tick()
+        assert astart(game, button=False) == [BOOST]
 
 
 def test_free_boost_option_and_vanilla_cases_untouched():

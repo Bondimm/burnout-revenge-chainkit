@@ -14,9 +14,14 @@ TEXTS = {
 }
 # one line, no second line under the award sign (it overlapped the stars)
 TEXTS["BigMessageBurnoutWowPart1"] = {"UK": "BURNOUT! WOW", "FR": "BURNOUT ! WOW", "GE": "BURNOUT! WOW"}
-# debug pop-ups (flags bit10): a boost without the button was stopped (PAD = pad controller, AUTO = per-frame check)
+# debug pop-ups (flags bit10): PAD = Revenge said "held" without the button, AUTO = a boost the button never backed,
+# TAP END = the button was let go (Revenge's minimum boost time cut), BLOCKED = the game / autopilot tried to start one
 TEXTS["BigMessageDebugBoostPadPart1"] = {"UK": "BOOST STOP: PAD", "FR": "BOOST STOP: PAD", "GE": "BOOST STOP: PAD"}
 TEXTS["BigMessageDebugBoostAutoPart1"] = {"UK": "BOOST STOP: AUTO", "FR": "BOOST STOP: AUTO", "GE": "BOOST STOP: AUTO"}
+TEXTS["BigMessageDebugBoostTapPart1"] = {"UK": "BOOST STOP: TAP END", "FR": "BOOST STOP: TAP END",
+                                         "GE": "BOOST STOP: TAP END"}
+TEXTS["BigMessageDebugBoostBlockPart1"] = {"UK": "BOOST BLOCKED: GAME START", "FR": "BOOST BLOCKED: GAME START",
+                                           "GE": "BOOST BLOCKED: GAME START"}
 for _t in TEXTS.values():          # USA disc: MAINUS.BIN (English, same texts)
     _t["US"] = _t["UK"]
 LANGS = ("UK", "FR", "GE", "US")

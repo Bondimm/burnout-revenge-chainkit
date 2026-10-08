@@ -82,7 +82,7 @@ def test_hooks_per_build():
     for r in (regions.PAL, regions.USA):
         lay = cave.Layout(r)
         hk = cave.hooks(lay, cave.build_code(lay)[1])
-        assert len(hk) == 36 and len({va for va, *_ in hk}) == 36
+        assert len(hk) == 37 and len({va for va, *_ in hk}) == 37
     usa = cave.Layout(regions.USA)
     hk = {va: old for va, old, new, what in cave.hooks(usa, cave.build_code(usa)[1])}
     assert hk[0x2A3CF4] == (3 << 26) | (0x2A4170 >> 2)                  # jal stop, translated

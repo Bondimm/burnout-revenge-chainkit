@@ -124,3 +124,16 @@ def test_only_boost_while_held_is_on_by_default():
     assert not settings.DEFAULTS["flags"] & cave.FL_FREEBOOST
     off = dict(settings.DEFAULTS, flags=settings.DEFAULTS["flags"] | cave.FL_FREEBOOST)
     assert not settings.is_on(it, off) and settings.shown(it, off) == "off"
+
+
+def test_switches_by_name_on_the_command_line():
+    v = cli._values(type("A", (), {"preset": None, "settings": None,
+                                   "set": ["only_boost_while_held=off", "debug_boost=on", "mode_traffic_attack=off",
+                                           "tint=off", "fill_mult=1.5"]})(), settings.DEFAULTS)
+    assert v["flags"] & cave.FL_FREEBOOST and v["flags"] & cave.FL_DEBUG and not v["flags"] & cave.FL_TINT
+    assert not v["modes"] & settings.MODES["traffic_attack"] and v["fill_mult"] == 1.5
+    on = settings.set_switch(v, "only_boost_while_held", True)
+    assert not on["flags"] & cave.FL_FREEBOOST
+    with pytest.raises(Exception, match="on or off"):
+        cli._parse_set(["tint=maybe"])
+    assert "only_boost_while_held=on|off" in " ".join(settings.describe())

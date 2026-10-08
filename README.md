@@ -230,6 +230,8 @@ in a terminal).
 | save settings to a file | `export "Burnout Revenge (Burnout Chain).iso" my.json` · `export --preset Hard hard.json` |
 | check a new image | `validate "Burnout Revenge (Europe).iso" "Burnout Revenge (Burnout Chain).iso"` |
 
+On/off settings have their own names, so no bit masks are needed: `--set only_boost_while_held=off`, `--set debug_boost=on`, `--set mode_traffic_attack=off` (`settings` lists every name).
+
 Settings are applied in this order: the preset (or, for `tune`, the image's own settings), then `--settings`, then
 `--set`. `build` and `tune` check the new image right away (`--no-validate` skips that).
 
