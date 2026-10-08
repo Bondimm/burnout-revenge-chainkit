@@ -102,3 +102,15 @@ def test_built_executable_runs_the_tested_code_and_messages(elf, monkeypatch):
     lay2 = elfpatch.layout(elf)
     bad, _ = elfpatch.patch(elf, v)
     assert elfpatch.message_problems(Elf(bad), lay2)
+
+
+def test_every_popup_reaches_the_game(elf):
+    """Each pop-up the code posts is in the built executable's message table once, under its name and flags."""
+    out, _ = elfpatch.patch(elf, settings.DEFAULTS)
+    e = Elf(out)
+    tab = elfpatch.message_table(e, elfpatch.layout(out))
+    names = {mid: (name, flags) for name, mid, flags, lvl in cave.NEW_MESSAGES}
+    for mid in (cave.M_SUPER, cave.M_BURNOUT, cave.M_LOST, cave.M_DOMI, cave.M_WOW, cave.M_DBGPAD, cave.M_DBGAUTO,
+                cave.M_DBGTAP, cave.M_DBGBLOCK):
+        hits = [t for t in tab if t[0] == mid]
+        assert hits == [(mid, names[mid][1], names[mid][0])], hex(mid)

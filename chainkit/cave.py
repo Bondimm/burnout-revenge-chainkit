@@ -70,7 +70,7 @@ NAMES = 0xEF0            # message names (ASCII; after the mode table)
 SCORN = 0x3C0            # shadow quad corners (32 bytes)
 MSGTAB = 0x400           # relocated + extended message table
 MAGIC = b"CHAINKIT"
-VERSION = 8              # 8: release = no button while the player drives; 7: debug message ids moved to free ids; 6: autopilot boost start refused; 3: per-mode switches, per-action fill factors, label/hint switches; 4: BTN hook;
+VERSION = 9              # 9: SUPERCHARGE LOST always; 8: release = no button while the player drives; 7: debug message ids moved to free ids; 6: autopilot boost start refused; 3: per-mode switches, per-action fill factors, label/hint switches; 4: BTN hook;
                          # 5: button read from the pad, checked every frame
 
 # (name, offset in G_TUNE block, type, default, help)
@@ -539,8 +539,9 @@ def build_code(lay):
     a.lbu("t1", S_SUPER, "s0"); a.beqz("t1", "LO_ret"); a.nop()
     a.sb("zero", S_SUPER, "s0"); a.sw("zero", S_ARROWS, "s0"); a.sw("zero", S_SLOW, "s0"); a.sw("zero", S_ANIM, "s0")
     a.mem("lwc1", "f0", lay.a["REGION"] + 0x2BC, "t1"); a.neg_s("f0", "f0"); a.swc1("f0", S_FULLT, "s0")   # cooldown
-    a.lw("t1", S_CHAIN, "s0"); a.sw("zero", S_CHAIN, "s0")
-    a.blez("t1", "LO_ret"); a.nop()
+    a.sw("zero", S_CHAIN, "s0")
+    # SUPERCHARGE LOST every time a supercharge ends (v1-v16 showed it only when a chain was running, so a partial
+    # refill without any BURNOUT before it was silent)
     a.send_msg("s1", M_LOST)
     a.sound(A["SND_LOSE"])
     a.label("LO_ret")

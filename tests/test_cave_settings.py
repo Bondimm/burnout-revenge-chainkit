@@ -372,3 +372,24 @@ def test_new_message_ids_are_free_and_accepted():
     from chainkit import assets
     for name, *_ in cave.NEW_MESSAGES:
         assert "BigMessage%sPart1" % name in assets.TEXTS, name
+
+
+# ------------------------------------------------------------------------------------------- every pop-up's path
+def test_each_popup_is_posted_by_its_path():
+    g = Game(); g.tick(); g.cpu.m.write(g.st(cave.S_EARNED), b"\1"); g.set_amt(g.max()); g.tick()
+    assert g.msgs() == [cave.M_SUPER]                                        # SUPERCHARGE READY!
+    g.boosting(True); g.cpu.m.wf32(g.st(cave.S_ARROWS), 200.0); g.set_amt(0.0); g.calls.clear(); g.empty()
+    assert g.msgs()[-1] == cave.M_BURNOUT                                    # BURNOUT!
+    g.cpu.m.w32(g.st(cave.S_CHAIN), 9); g.cpu.m.wf32(g.st(cave.S_ARROWS), 200.0); g.set_amt(0.0)
+    g.calls.clear(); g.empty()
+    assert g.msgs()[-1] == cave.M_DOMI                                       # BURNOUT DOMINATION! (x10)
+    g2 = Game(); g2.tick(); g2.cpu.m.write(g2.st(cave.S_EARNED), b"\1"); g2.set_amt(g2.max()); g2.tick()
+    g2.boosting(True); g2.cpu.m.w32(g2.st(cave.S_CHAIN), 999); g2.cpu.m.wf32(g2.st(cave.S_ARROWS), 200.0)
+    g2.set_amt(0.0); g2.calls.clear(); g2.empty()
+    assert g2.msgs()[-1] == cave.M_WOW                                       # BURNOUT! WOW
+
+
+def test_partial_refill_without_any_burnout_says_supercharge_lost():
+    g = supercharged(); g.boosting(True)                 # chain 0, no arrows lit
+    g.set_amt(0.0); g.calls.clear(); g.empty()
+    assert g.super() == 0 and cave.M_LOST in g.msgs()    # (silent before v17: only shown with a chain)
