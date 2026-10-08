@@ -17,7 +17,7 @@ DEFAULTS = {n: d for n, off, t, d, h in cave.TUNABLES}
 HELP = {n: h for n, off, t, d, h in cave.TUNABLES}
 FLAGS = dict(popups=cave.FL_MSG, arrows=cave.FL_ARROWS, tint=cave.FL_TINT, sounds=cave.FL_SOUND, slow_rule=cave.FL_SLOW,
              no_earn_while_boosting=cave.FL_NOEARN, full_bar=cave.FL_FULLBAR, show_size_label=cave.FL_SHOWLABEL,
-             show_boost_hint=cave.FL_SHOWHINT)
+             show_boost_hint=cave.FL_SHOWHINT, boost_without_button=cave.FL_FREEBOOST)
 MODES = {key: 1 << bit for bit, key, _ in cave.MODES if key != "online"}
 ALL_MODES = sum(MODES.values())
 ALL_FLAGS = sum(FLAGS.values())
@@ -65,13 +65,19 @@ SPEED = Unit(lambda r: r * 3.6, lambda u: u / 3.6, "%.0f km/h", 20.0, 250.0)
 
 
 class Item:
-    def __init__(self, key, label, help_, unit=None, kind=None, bit=None):
+    def __init__(self, key, label, help_, unit=None, kind=None, bit=None, invert=False):
         self.key, self.label, self.help, self.unit, self.bit = key, label, help_, unit, bit
+        self.invert = invert          # checkbox ticked = bit CLEAR
         self.kind = kind or ("colour" if TYPES.get(key) == "c" else "int" if TYPES.get(key) == "i" else "float")
 
 
-def flag(name, label, help_):
-    return Item("flags", label, help_, kind="flag", bit=FLAGS[name])
+def flag(name, label, help_, invert=False):
+    return Item("flags", label, help_, kind="flag", bit=FLAGS[name], invert=invert)
+
+
+def is_on(item, values):
+    """Checkbox state of a flag / mode item."""
+    return bool(values[item.key] & item.bit) != item.invert
 
 
 def mode(name, label, help_):
@@ -166,6 +172,10 @@ GROUPS = [
         flag("sounds", "Sounds", "A sound when the bar supercharges, on every BURNOUT and when the supercharge "
              "is lost."),
         flag("tint", "Blue bar while supercharged", "The boost bar turns blue while it is supercharged."),
+        flag("boost_without_button", "Only boost while the button is held",
+             "Your car boosts only while you hold the boost button. Any boost the button does not back (for "
+             "example a boost the game keeps going after a takedown or a Perfect Start) stops at once. Off: "
+             "Revenge's own behaviour (a tap gives a short boost, a Perfect Start boosts on its own).", invert=True),
         flag("arrows", "Arrows", "Draw the 16 arrows over the bar. Off: no arrows are drawn and none are lit, "
              "so every refill is partial."),
         flag("show_size_label", "Show the x2 - x4 bar-size label", "Revenge's label at the end of the bar. "
@@ -313,7 +323,7 @@ def shown(item, values):
     """The value of one window item as text (human units)."""
     v = values[item.key]
     if item.kind in ("flag", "mode"):
-        return "on" if v & item.bit else "off"
+        return "on" if is_on(item, values) else "off"
     if item.kind == "colour":
         return "%.2f, %.2f, %.2f, %.2f" % tuple(v)
     if item.unit:

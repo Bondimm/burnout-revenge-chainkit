@@ -142,3 +142,69 @@ def test_tunable_addresses_do_not_overlap():
     for a, e, n in used:
         assert A["REGION"] <= a and e <= LAY.code, n
         assert not (LAY.msgtab <= a < LAY.msgtab + 12 * LAY.msg_count), n
+
+
+# ------------------------------------------------------------------------------------------- boost only while held
+CTRL = 0x5C000          # the human pad controller object (car at +0x2E80)
+
+
+def pad(g, held):
+    """Run the pad controller's 'boost button held?' query (hook BTN) with the button held or not."""
+    g.cpu.m.w32(CTRL + cave.P_CAR, CAR)
+    g.cpu.stubs[A["HELD"]] = lambda cpu: cpu.g.__setitem__(2, 1 if held else 0)
+    g.calls.clear()
+    g.run("BTN", a0=CTRL)
+    return g.cpu.gr(2)
+
+
+def test_boost_stops_at_once_without_the_button():
+    g = Game(); g.tick(); g.set_amt(200.0); g.boosting(True)
+    assert pad(g, held=True) == 1 and g.is_boosting() and "stop" not in g.names()
+    assert pad(g, held=False) == 0 and not g.is_boosting() and g.names()[-1] == "stop"
+
+
+def test_takedown_then_no_button_stops_boost_but_keeps_supercharge():
+    g = supercharged(); g.boosting(True)
+    g.run("TAKEDOWN", a0=BOOST)                          # supercharged takedown: all arrows, grace starts
+    assert g.super() == 1 and g.arrows() == 200.0
+    pad(g, held=False)                                   # the game keeps boosting, the player does not hold
+    assert not g.is_boosting() and "stop" in g.names()
+    assert g.super() == 1 and g.cpu.m.read(g.st(cave.S_PAUSED), 1)[0] == 1     # grace: supercharge kept
+    assert cave.M_LOST not in g.msgs()
+
+
+def test_takedown_then_button_held_keeps_boosting():
+    g = supercharged(); g.boosting(True)
+    g.run("TAKEDOWN", a0=BOOST)
+    for _ in range(10):
+        assert pad(g, held=True) == 1
+        g.tick()
+    assert g.is_boosting() and g.super() == 1
+
+
+def test_letting_go_after_the_grace_loses_the_supercharge():
+    g = supercharged(); g.boosting(True); g.cpu.m.w32(g.st(cave.S_CHAIN), 3)
+    pad(g, held=False)
+    assert not g.is_boosting() and g.super() == 0 and cave.M_LOST in g.msgs()
+
+
+def test_perfect_start_latch_boost_stops_without_the_button():
+    g = Game(); g.tick(); g.set_amt(300.0); g.boosting(True)
+    g.cpu.m.write(BOOST + cave.B_AUTO, b"\1")            # Revenge ignores stop requests while this is set
+    pad(g, held=False)
+    assert not g.is_boosting()
+
+
+def test_free_boost_option_and_vanilla_cases_untouched():
+    g = Game(flags=TUNE["flags"] | cave.FL_FREEBOOST); g.tick(); g.boosting(True)
+    pad(g, held=False)
+    assert g.is_boosting() and "stop" not in g.names()               # option off: Revenge decides
+    for game in (Game(ctrl=1), _crash_game()):
+        game.tick(); game.boosting(True)
+        pad(game, held=False)
+        assert game.is_boosting() and "stop" not in game.names()     # AI / Crash mode: vanilla
+
+
+def _crash_game():
+    g = Game(); g.cpu.m.write(A["CRASHFLAG"], b"\1")
+    return g

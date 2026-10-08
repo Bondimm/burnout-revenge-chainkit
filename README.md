@@ -107,6 +107,7 @@ like the original game. Crash mode and online races are always the original game
 | Setting | Default | Meaning |
 |---|---|---|
 | Always the full 4-segment bar | on | Off: Revenge's own bar sizes (the bar grows with takedowns, shrinks when you crash). |
+| Only boost while the button is held | on | Your car boosts only while you hold the boost button; a boost the button does not back (e.g. one the game keeps going after a takedown or a Perfect Start) stops at once. Off: Revenge's own behaviour. |
 | No boost earning while boosting | off | Dominator rule: while boosting on a normal bar, driving gives no boost. |
 | Supercharged boost drains faster | ×3 | How much faster a supercharged bar empties. |
 | Refill base | 50 % | A supercharged bar that runs empty refills to this plus the lit arrows (also the size of the arrow pool). |
@@ -253,6 +254,8 @@ image — it simply is not the original pressing anymore. It does not affect the
 
 **The bar does not turn blue.** It supercharges only from boost you *earned* in this race (a bar that starts full
 does not count) and not during the 3 seconds after a supercharge was lost. A takedown supercharges it at once.
+
+**My car kept boosting on its own after a takedown.** Fixed: with *Only boost while the button is held* (on by default) the car boosts only while you hold the button. Make a new image with the current ChainKit from your ISO without the mod (images from older versions cannot be changed, ChainKit says so).
 
 **Why is there no "x2 / x3 / x4" next to my bar any more?** With the mod the bar is always the full 4 segments, so
 the label is hidden (it also covered the arrows). Turn it back on under *Display and sound*. The chain is shown by

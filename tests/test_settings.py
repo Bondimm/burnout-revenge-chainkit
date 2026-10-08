@@ -116,3 +116,11 @@ def test_cli_set_parsing():
         cli._parse_set(["nope=1"])
     with pytest.raises(Exception, match="not a number"):
         cli._parse_set(["fill_mult=fast"])
+
+
+def test_only_boost_while_held_is_on_by_default():
+    it = [i for i in settings.ITEMS if i.bit == cave.FL_FREEBOOST][0]
+    assert it.invert and settings.is_on(it, settings.DEFAULTS)
+    assert not settings.DEFAULTS["flags"] & cave.FL_FREEBOOST
+    off = dict(settings.DEFAULTS, flags=settings.DEFAULTS["flags"] | cave.FL_FREEBOOST)
+    assert not settings.is_on(it, off) and settings.shown(it, off) == "off"

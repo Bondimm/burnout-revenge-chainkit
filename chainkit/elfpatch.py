@@ -141,7 +141,8 @@ def patch(data, tunables=None):
     merged = ph[0][2] + ph[0][4] == ph[1][2]
     # original words at every hook site (translated for the USA build): a wrong address can never be written
     for va, old, new, what in cave.hooks(lay, {k: 0 for k in ("ADD", "DRAIN", "EMPTY", "TICK", "TAKEDOWN", "CRASH",
-                                                               "TINT", "HUDLBL", "SUB", "TRACK", "SHRINK", "RELEASE", "PROMPT")}):
+                                                               "TINT", "HUDLBL", "SUB", "TRACK", "SHRINK", "RELEASE", "PROMPT",
+                                                               "BTN")}):
         if e.r32(va) != old:
             raise ChainError("unexpected code at %#x (%08x, expected %08x): unsupported or modified executable"
                              % (va, e.r32(va), old))

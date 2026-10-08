@@ -82,7 +82,7 @@ def test_hooks_per_build():
     for r in (regions.PAL, regions.USA):
         lay = cave.Layout(r)
         hk = cave.hooks(lay, cave.build_code(lay)[1])
-        assert len(hk) == 33 and len({va for va, *_ in hk}) == 33
+        assert len(hk) == 34 and len({va for va, *_ in hk}) == 34
     usa = cave.Layout(regions.USA)
     hk = {va: old for va, old, new, what in cave.hooks(usa, cave.build_code(usa)[1])}
     assert hk[0x2A3CF4] == (3 << 26) | (0x2A4170 >> 2)                  # jal stop, translated
@@ -136,3 +136,15 @@ def test_patch_both_builds(elfs):
         out, rep = elfpatch.patch(elf, settings.DEFAULTS)
         assert rep["region"] == key and elfpatch.check(out, lambda *a: None) == []
         assert elfpatch.region_of(out)["key"] == key and elfpatch.version(out) == cave.VERSION
+
+
+@both
+def test_pad_controller_layout_same_in_both_builds(elfs):
+    """BTN reads the car of the pad controller at +0x2E80: check the game's own code at the hook in both builds."""
+    for elf, key in zip(elfs, ("PAL", "USA")):
+        e = Elf(elf)
+        site = regions.t(regions.BY_KEY[key], 0x204E4C)
+        assert e.r32(site) == (3 << 26) | (regions.t(regions.BY_KEY[key], 0x1F2220) >> 2)
+        assert e.r32(site + 0xC) == 0x8E040000 | cave.P_CAR            # lw a0, 0x2E80(s0) after the call
+        held = regions.t(regions.BY_KEY[key], 0x1F2220)
+        assert 0x90821388 in [e.r32(held + 4 * k) for k in range(24)]  # lbu v0, 0x1388(a0): the pad bits

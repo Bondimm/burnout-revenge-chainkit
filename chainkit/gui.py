@@ -614,8 +614,8 @@ class ChainKitGui:
     def ui_item(self, U, imgui, it):
         v = self.values[it.key]
         if it.kind in ("flag", "mode"):
-            dflt = bool(settings.DEFAULTS[it.key] & it.bit)
-            cur = bool(v & it.bit)
+            dflt = settings.is_on(it, settings.DEFAULTS)
+            cur = settings.is_on(it, self.values)
             changed_ = cur != dflt
         else:
             changed_ = not settings.same(v, settings.DEFAULTS[it.key])
@@ -630,7 +630,7 @@ class ChainKitGui:
         if it.kind in ("flag", "mode"):
             ch, nv = imgui.checkbox(wid, cur)
             if ch:
-                self.set_bit(it.key, it.bit, nv)
+                self.set_bit(it.key, it.bit, nv != it.invert)
         elif it.kind == "colour":
             ch, nv = imgui.color_edit4(wid, list(v), imgui.ColorEditFlags_.alpha_preview_half)
             if ch:
