@@ -146,14 +146,14 @@ loads it too.
 
 | What | Details |
 |---|---|
-| Operating system | Windows 10 or 11 (64-bit), or macOS 14 Sonoma or newer (Apple Silicon or Intel) |
+| Operating system | Windows 10 or 11 (64-bit), macOS 14 Sonoma or newer (Apple Silicon or Intel), or 64-bit Linux (x86_64 or aarch64, glibc 2.28+; tested on Ubuntu 22.04 / 24.04) |
 | Python | 3.11 or newer — <https://www.python.org/downloads/> |
-| Python packages | installed automatically by `setup.bat` / `setup.command` into a private `.venv`: numpy, glfw, PyOpenGL, imgui-bundle, Pillow, pytest (see [requirements.txt](requirements.txt)) |
+| Python packages | installed automatically by `setup.bat` / `setup.command` / `setup.sh` into a private `.venv`: numpy, glfw, PyOpenGL, imgui-bundle, Pillow, pytest (see [requirements.txt](requirements.txt)) |
 | Graphics | any GPU with OpenGL 3.3 (for the ChainKit window) |
 | Disk space | about 4.5 GB free for the new disc image plus ~300 MB for the Python packages |
 | The game | your own disc image (.iso) of Burnout Revenge for PS2, PAL `SLES-53507` |
 | Optional | your own disc image of Burnout Dominator (PS2) for the arrow art |
-| Internet | only once, during `setup.bat` / `setup.command` |
+| Internet | only once, during `setup.bat` / `setup.command` / `setup.sh` |
 
 ## Installation (Windows 10 / 11)
 
@@ -183,10 +183,31 @@ For Apple Silicon (M1 and newer) and Intel Macs with macOS 14 Sonoma or newer.
 4. Start **`ChainKit.command`** and keep its Terminal window open while you use ChainKit. Settings and the log
    (`gui.log`) are kept in `~/Library/Application Support/chainkit`.
 
+## Installation (Linux)
+
+For 64-bit Linux on x86_64 or aarch64 (glibc 2.28 or newer; Alpine / musl is not supported). Tested in CI on
+Ubuntu 22.04 and 24.04 (x86_64); other distributions (Debian, Fedora, Arch, openSUSE, Mint, ...) should work the same way.
+
+1. Install the system packages. Python 3.11 or newer, and on Debian / Ubuntu the separate `venv` package:
+   - Debian / Ubuntu / Mint: `sudo apt install python3 python3-venv python3-pip libgl1 libegl1 libxkbcommon0 zenity`
+   - Fedora: `sudo dnf install python3 python3-pip mesa-libGL mesa-libEGL libxkbcommon zenity`
+   - Arch / Manjaro: `sudo pacman -S python python-pip mesa libglvnd libxkbcommon zenity`
+   - Ubuntu 22.04 has Python 3.10 only: add Python 3.11+ first (deadsnakes PPA, or <https://www.python.org/downloads/>).
+   - The window needs OpenGL 3.3 (Mesa or the GPU driver) and an X11 or Wayland session. **`zenity`** (or `kdialog`
+     on KDE) is used for the file and folder dialogs; without it, the dialogs do not open. The GLFW and
+     imgui-bundle wheels bring everything else.
+2. Download this repository (green **Code** button → *Download ZIP*) and unpack it, or `git clone` it.
+3. Open a terminal in the folder and run **`./setup.sh`** once. It creates a private Python environment in `.venv`.
+   Nothing is installed system-wide. If you get *"Permission denied"*, run `chmod +x *.sh` first.
+4. Start **`./ChainKit.sh`** and keep the terminal open while you use ChainKit. Settings and the log (`gui.log`) are kept in
+   `~/.config/chainkit` (or `$XDG_CONFIG_HOME/chainkit`).
+
+The Windows version also runs under Wine, but use the native Linux version.
+
 ## Command line (optional)
 
-Everything the window does is also available from `chainkit-cli.bat` (Windows) or `./chainkit-cli.sh` (macOS,
-in Terminal).
+Everything the window does is also available from `chainkit-cli.bat` (Windows) or `./chainkit-cli.sh` (macOS / Linux,
+in a terminal).
 
 | Task | Command |
 |---|---|

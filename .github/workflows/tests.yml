@@ -15,9 +15,11 @@ jobs:
       fail-fast: false
       matrix:
         # macos-latest = Apple Silicon (arm64), macos-15-intel = Intel (x86_64)
-        os: [windows-latest, macos-latest, macos-15-intel]
+        # ubuntu-latest = 24.04 x86_64; ubuntu-24.04-arm = Linux aarch64 (free for public repos)
+        os: [windows-latest, macos-latest, macos-15-intel, ubuntu-22.04, ubuntu-latest, ubuntu-24.04-arm]
         python: ["3.11", "3.13"]
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.os == 'ubuntu-24.04-arm' }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
@@ -51,6 +53,27 @@ jobs:
           ./chainkit-cli.sh presets
           CHAINKIT_NO_PAUSE=1 ./setup.command   # a second run only checks (idempotent)
 
+      - name: System libraries (Linux, for the GUI screenshot only)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb libgl1 libegl1 libgl1-mesa-dri libxkbcommon0 zenity
+
+      - name: Run setup.sh (the Linux installer)
+        if: runner.os == 'Linux'
+        env:
+          CHAINKIT_NO_PAUSE: "1"
+        run: ./setup.sh
+
+      - name: Check the Linux launchers
+        if: runner.os == 'Linux'
+        run: |
+          test -x setup.sh && test -x ChainKit.sh && test -x chainkit-cli.sh
+          .venv/bin/python --version
+          ./chainkit-cli.sh --help > /dev/null
+          ./chainkit-cli.sh presets
+          CHAINKIT_NO_PAUSE=1 ./setup.sh   # a second run only checks (idempotent)
+
       - name: Tests (disc tests skip without an ISO)
         shell: bash
         run: |
@@ -64,7 +87,8 @@ jobs:
         shell: bash
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then PY=.venv/Scripts/python.exe; else PY=.venv/bin/python; fi
-          "$PY" -m chainkit gui --shot gui.png && ls -l gui.png
+          if [ "$RUNNER_OS" = "Linux" ]; then XV="xvfb-run -a"; else XV=""; fi
+          $XV "$PY" -m chainkit gui --shot gui.png && ls -l gui.png
 
       - name: Upload the GUI screenshot
         if: hashFiles('gui.png') != ''
