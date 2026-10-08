@@ -1,21 +1,56 @@
-"""Apply / inspect the Burnout Chain patch on the Burnout Revenge PAL executable (SLES_535.07).
+"""Apply / inspect the Burnout Chain patch on the Burnout Revenge executable: Europe / PAL SLES_535.07 or
+USA / NTSC SLUS_212.42 (the build is recognised by its PCSX2 CRC; regions.py).
 
-Works on the original ELF and on CarKit-ISO / MusicKit output (any order):
-- the code + data go into the top of the .sndata hole (0x4A4000..0x4A7680); if segment 0 does not cover the hole
-  yet it is extended exactly like MusicKit does (hole inserted into the file, later sections shifted);
-- MusicKit's song table lives at the bottom of the hole (0x4A3680, <= 1200 bytes), CarKit uses the 48-byte gap at
-  0x45A5D0 and code at 0x134D68..0x134D74 - none of these overlap;
+Works on the original ELF and on CarKit-ISO / MusicKit output:
+- the code + data go into the top of the .sndata hole (PAL 0x4A4000..0x4A7680, USA 0x4A3E80..0x4A7500); if segment 0
+  does not cover the hole yet it is extended exactly like MusicKit does (hole inserted into the file, later
+  sections shifted);
+- MusicKit's song table lives at the bottom of the hole (<= 1200 bytes), CarKit uses the gap after .text and code at
+  PAL 0x134D68..0x134D74 - none of these overlap;
 - the PCSX2 CRC (XOR of all ELF words) is kept with the compensation word after the file content.
 """
 import struct
 
-from . import cave
+from . import cave, regions
 from .elf import Elf, crc, _fix_crc
 
-PAL_CRC = 0x7E83CC5B
-CARKIT_RANGES = [(0x134D68, 0x134D78), (0x45A5D0, 0x45A600)]
-MUSICKIT_TABLE = (0x4A3678, 0x4A3680 + 100 * 12)
-PNACH = [0x3A64A8, 0x1BFEB10]       # PCSX2 widescreen (PAL); same list as musickit.validate
+PAL_CRC = regions.PAL["crc"]
+USA_CRC = regions.USA["crc"]
+CRCS = {r["crc"]: r for r in (regions.PAL, regions.USA)}
+CARKIT_CODE = (0x134D68, 0x134D78)          # PAL; translated per build
+
+
+def region_of(data, allow_unknown=False):
+    """The build of an executable (by its PCSX2 CRC, which every kit keeps)."""
+    r = CRCS.get(crc(data))
+    if r is None and not allow_unknown:
+        raise ChainError("not a Burnout Revenge executable ChainKit knows (CRC %08X; supported: Europe "
+                         "SLES-53507, USA SLUS-21242)" % crc(data))
+    return r
+
+
+def layout(data):
+    return cave.Layout(region_of(data))
+
+
+def text_range(e):
+    """(start, end) of .text (the code ChainKit's branch check scans)."""
+    for sh in e.sections():
+        if sh[1] == 1 and sh[2] & 4 and sh[3] == e.phdrs()[0][2]:
+            return sh[3], sh[3] + sh[5]
+    s0 = e.phdrs()[0]
+    return s0[2], s0[2] + s0[4]
+
+
+def carkit_ranges(e, region):
+    """Addresses CarKit ISO may write: its code site and the padding gap after .text (like carkitiso.elfcar)."""
+    out = [(regions.t(region, CARKIT_CODE[0]), regions.t(region, CARKIT_CODE[0]) + 0x10)]
+    secs = sorted((sh for sh in e.sections() if sh[3] and sh[1] in (1, 8)), key=lambda sh: sh[3])
+    t0, t1 = text_range(e)
+    nxt = min((sh[3] for sh in secs if sh[3] >= t1), default=None)
+    if nxt is not None:
+        out.append(((t1 + 15) & ~15, nxt))
+    return out
 
 
 class ChainError(Exception):
@@ -31,7 +66,10 @@ def _segs(e):
 
 def is_applied(data):
     e = Elf(data)
-    lay = cave.Layout()
+    r = region_of(data, allow_unknown=True)
+    if r is None:
+        return False
+    lay = cave.Layout(r)
     try:
         off = e.file_offset(lay.g + cave.G_MAGIC)
     except KeyError:
@@ -44,15 +82,15 @@ def version(data):
     if not is_applied(data):
         return None
     e = Elf(data)
-    return e.r32(cave.Layout().g + cave.G_MAGIC + 8)
+    return e.r32(layout(data).g + cave.G_MAGIC + 8)
 
 
-def _open_hole(e):
+def _open_hole(e, lay):
     """Extend segment 0 over the .sndata hole (MusicKit's method). Returns a new Elf."""
     ph = _segs(e)
     s0, s1 = ph[0], ph[1]
     hole_start, hole_end = s0[2] + s0[4], s1[2]
-    A = cave.PAL
+    A = lay.a
     if not (hole_start <= A["REGION"] and A["HOLE_END"] == hole_end):
         raise ChainError("no room in the .sndata hole (unexpected executable)")
     hole = bytearray(hole_end - hole_start)
@@ -91,32 +129,32 @@ def build(lay=None, tunables=None, old_table=None):
 
 
 def patch(data, tunables=None):
-    """Return (patched ELF bytes, report dict). `data` = PAL executable (original, CarKit and/or MusicKit output)."""
+    """Return (patched ELF bytes, report dict). `data` = the PAL or USA executable (original, CarKit and/or
+    MusicKit output)."""
     if is_applied(data):
         raise ChainError("the Burnout Chain patch is already applied (use 'tune' to change settings)")
     target = crc(data)
-    if target != PAL_CRC:
-        raise ChainError("not the PAL Burnout Revenge executable (CRC %08X)" % target)
+    lay = layout(data)
+    A = lay.a
     e = Elf(data)
     ph = _segs(e)
     merged = ph[0][2] + ph[0][4] == ph[1][2]
-    lay = cave.Layout()
-    # original words at every hook site
+    # original words at every hook site (translated for the USA build): a wrong address can never be written
     for va, old, new, what in cave.hooks(lay, {k: 0 for k in ("ADD", "DRAIN", "EMPTY", "TICK", "TAKEDOWN", "CRASH",
                                                                "TINT", "HUDLBL", "SUB", "TRACK", "SHRINK", "RELEASE", "PROMPT")}):
         if e.r32(va) != old:
             raise ChainError("unexpected code at %#x (%08x, expected %08x): unsupported or modified executable"
                              % (va, e.r32(va), old))
-    old_table = bytes(e.d[e.file_offset(cave.PAL["MSGTAB_OLD"]):][:12 * cave.PAL["MSG_COUNT"]])
+    old_table = bytes(e.d[e.file_offset(A["MSGTAB_OLD"]):][:12 * A["MSG_COUNT"]])
     lay, code, labels, region = build(lay, tunables, old_table)
     if merged:
-        o = e.file_offset(cave.PAL["REGION"])
-        if any(e.d[o:o + (cave.PAL["HOLE_END"] - cave.PAL["REGION"])]):
+        o = e.file_offset(A["REGION"])
+        if any(e.d[o:o + (A["HOLE_END"] - A["REGION"])]):
             raise ChainError("the top of the .sndata hole is already in use by another patch")
         ne = e
     else:
-        ne = _open_hole(e)
-    o = ne.file_offset(cave.PAL["REGION"])
+        ne = _open_hole(e, lay)
+    o = ne.file_offset(A["REGION"])
     ne.d[o:o + len(region)] = region
     o = ne.file_offset(lay.code)
     ne.d[o:o + len(code)] = code
@@ -125,8 +163,8 @@ def patch(data, tunables=None):
         ne.w32(va, new)
     appended = len(ne.d) > ne.content_end()
     out = _fix_crc(ne.d, target, appended)
-    rep = dict(hole_opened=not merged, code=(lay.code, lay.code + len(code)), data=(cave.PAL["REGION"], lay.code),
-               hooks=hk, labels=labels, crc=crc(out))
+    rep = dict(hole_opened=not merged, code=(lay.code, lay.code + len(code)), data=(A["REGION"], lay.code),
+               hooks=hk, labels=labels, crc=crc(out), region=lay.region["key"])
     return out, rep
 
 
@@ -139,7 +177,7 @@ def tune(data, tunables):
                          "the mod")
     target = crc(data)
     e = Elf(data)
-    lay = cave.Layout()
+    lay = layout(data)
     known = {n for n, *_ in cave.TUNABLES}
     for name, val in tunables.items():
         if name not in known:
@@ -156,7 +194,7 @@ def tune(data, tunables):
 
 def read_tunables(data):
     e = Elf(data)
-    lay = cave.Layout()
+    lay = layout(data)
     out = {}
     for name, off, t, d, h in cave.TUNABLES:
         addr, _ = cave.tune_addr(lay, name)
@@ -167,13 +205,19 @@ def read_tunables(data):
     return out
 
 
+# replaced second instructions of two-word hooks (no branch of the game may land on them), PAL addresses
+INNER = (0x2A3EEC, 0x2A3A9C, 0x15E3BC, 0x15DCF4, 0x15DD0C, 0x2A3F54, 0x2C890C, 0x16D35C)
+
+
 def check(data, log=print):
     """Static checks of a patched executable. Returns a list of problems (empty = OK)."""
     bad = []
     e = Elf(data)
-    lay = cave.Layout()
-    if crc(data) != PAL_CRC:
-        bad.append("CRC %08X != %08X" % (crc(data), PAL_CRC))
+    region = region_of(data, allow_unknown=True)
+    if region is None:
+        return ["CRC %08X is not a known Burnout Revenge build" % crc(data)]
+    lay = cave.Layout(region)
+    A = lay.a
     if not is_applied(data):
         return bad + ["patch not applied"]
     code, labels = cave.build_code(lay)
@@ -184,20 +228,19 @@ def check(data, log=print):
     for va, old, new, what in hk:
         if e.r32(va) != new:
             bad.append("hook %#x not applied" % va)
-    touched = [(va, va + 4) for va, *_ in hk] + [(cave.PAL["REGION"], cave.PAL["HOLE_END"])]
+    touched = [(va, va + 4) for va, *_ in hk] + [(A["REGION"], A["HOLE_END"])]
     for lo, hi in touched:
-        for a, b in CARKIT_RANGES + [MUSICKIT_TABLE]:
+        for a, b in carkit_ranges(e, region) + [region["musickit_table"]]:
             if lo < b and a < hi:
                 bad.append("overlap with CarKit/MusicKit at %#x" % lo)
-        for p in PNACH:
+        for p in region["pnach"]:
             if lo <= p < hi:
                 bad.append("overlap with PCSX2 pnach at %#x" % p)
-    # no branch/jump of the game may land on a replaced second instruction
-    inner = {0x2A3EEC, 0x2A3A9C, 0x15E3BC, 0x15DCF4, 0x15DD0C, 0x2A3F54, 0x2C890C, 0x16D35C}
-    s0 = e.phdrs()[0]
-    words = struct.unpack_from("<%dI" % (0x35A5D0 // 4), e.d, s0[1])
+    inner = {lay.t(x) for x in INNER}
+    t0, t1 = text_range(e)
+    words = struct.unpack_from("<%dI" % ((t1 - t0) // 4), e.d, e.file_offset(t0))
     for i, w in enumerate(words):
-        pc = s0[2] + 4 * i
+        pc = t0 + 4 * i
         op = w >> 26
         t = None
         if op in (2, 3):

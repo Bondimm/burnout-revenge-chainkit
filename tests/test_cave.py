@@ -1,4 +1,5 @@
-"""Runs the generated cave code in the mips interpreter against a fake Revenge memory (design v4: native bar)."""
+"""Runs the generated cave code in the mips interpreter against a fake Revenge memory (design v4: native bar).
+PAL by default; test_cave_usa.py runs every test again with the USA addresses."""
 import os
 import struct
 import sys
@@ -6,11 +7,15 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from chainkit import cave                      # noqa: E402
+from chainkit import cave, regions             # noqa: E402
 from chainkit.mips import Cpu, RI              # noqa: E402
 
-A = cave.PAL
-LAY = cave.Layout()
+# The same suite runs for the USA build: tests/test_cave_usa.py loads this file with REGION_KEY = "USA".
+REGION = regions.BY_KEY[globals().get("REGION_KEY", "PAL")]
+LAY = cave.Layout(REGION)
+A = LAY.a
+T = LAY.t                                      # PAL address -> address in this build
+OTHER_RA = 0x2CE9B8                            # a return address that is no award call site (in both builds)
 CODE, LAB = cave.build_code(LAY)
 CAR = 0x1ED82F0
 CAR2 = CAR + 0x3B30
@@ -68,8 +73,8 @@ class Game:
                                ("label", A["LABELFN"], None), ("settex", A["SETTEX"], None), ("quad", A["QUAD"], quad),
                                ("add_ret", A["ADD_RET"], None), ("drain_ret", A["DRAIN_RET"], None),
                                ("tint_ret", A["TINT_RET"], None), ("td_skip", A["TAKEDOWN_SKIP"], None),
-                               ("sub_ret", 0x2A3F8C, lambda cpu: cpu.g.__setitem__(31, SENT)),
-                               ("sub_orig", 0x2A3F58, sub_orig), ("track_ret", 0x2C8910, track_ret)]:
+                               ("sub_ret", T(0x2A3F8C), lambda cpu: cpu.g.__setitem__(31, SENT)),
+                               ("sub_orig", T(0x2A3F58), sub_orig), ("track_ret", T(0x2C8910), track_ret)]:
             c.stubs[addr] = rec(name, fn)
 
     # helpers
@@ -615,13 +620,13 @@ def test_oncoming_and_drift_normal_fill_pacing():
     def call_from(g, ra, amount):
         g.cpu.m.w32(0x70000, ra)                       # FUN_002a3e80's saved $ra = the event's call site
         return g.run("ADD", s0=BOOST, f20=amount)
-    for ra, per_m, speed, secs in ((0x2CC4A0, 0.3, 70.0, 5.0), (0x2CC6DC, 1.0, 55.0, 4.0)):
+    for ra, per_m, speed, secs in ((T(0x2CC4A0), 0.3, 70.0, 5.0), (T(0x2CC6DC), 1.0, 55.0, 4.0)):
         g = Game(); g.tick(); g.set_amt(0.0)
         frames = 0
         while g.amt() < 400.0 and frames < 60 * 20:
             call_from(g, ra, per_m * 4 * speed / 60); frames += 1    # value x bar multiplier 4, per frame
         assert frames / 60 == pytest.approx(secs, rel=0.1), (hex(ra), frames / 60)
-    g = Game(); g.tick(); g.set_amt(0.0); call_from(g, 0x2CE9B8, 60.0)   # other events: fill_mult only
+    g = Game(); g.tick(); g.set_amt(0.0); call_from(g, OTHER_RA, 60.0)   # other events: fill_mult only
     assert g.amt() == pytest.approx(60 * TUNE["fill_mult"])
 
 
@@ -633,23 +638,23 @@ def award(g, ra, amount):
 
 def test_slam_and_contact_awards_are_weak():
     g = Game(); g.tick(); g.set_amt(0.0)
-    award(g, 0x2CE254, 360 * 4)                          # slam: 1/6 of the bar
+    award(g, T(0x2CE254), 360 * 4)                          # slam: 1/6 of the bar
     assert g.amt() == pytest.approx(400 / 6, rel=0.05)
-    g.set_amt(0.0); award(g, 0x2CDF58, 3 * 4)           # trading paint
+    g.set_amt(0.0); award(g, T(0x2CDF58), 3 * 4)           # trading paint
     assert g.amt() == pytest.approx(3 * 4 * 1.15 * 0.05)
     g.set_amt(0.0)
     for _ in range(60):
-        award(g, 0x2CE8AC, 15 * 4 / 60)                 # one second of rubbing
+        award(g, T(0x2CE8AC), 15 * 4 / 60)                 # one second of rubbing
     assert g.amt() == pytest.approx(15 * 4 * 1.15 * 0.30, rel=1e-3)
-    g.set_amt(0.0); award(g, 0x2CE9B8, 60 * 4)          # near miss untouched (fill_mult only)
+    g.set_amt(0.0); award(g, OTHER_RA, 60 * 4)          # near miss untouched (fill_mult only)
     assert g.amt() == pytest.approx(min(400, 240 * 1.15))
 
 
 def test_slam_lights_a_sixth_of_the_arrows_while_supercharge_boosting():
     g = supercharged(); g.boosting(True)
-    award(g, 0x2CE254, 1440.0)
+    award(g, T(0x2CE254), 1440.0)
     assert g.arrows() == pytest.approx(200 / 6, rel=1e-4) and g.amt() == 400.0
-    award(g, 0x2CDF58, 12.0)                             # trading paint: no arrows from the award itself
+    award(g, T(0x2CDF58), 12.0)                             # trading paint: no arrows from the award itself
     assert g.arrows() == pytest.approx(200 / 6, rel=1e-4)
     g.track("rubbing", 1.0); g.track("grinding", 1.0)    # contact seconds in the skill list: 0.05 each
     assert g.arrows() == pytest.approx(200 / 6 + 2 * 0.05 * 200, rel=1e-4)
@@ -657,7 +662,7 @@ def test_slam_lights_a_sixth_of_the_arrows_while_supercharge_boosting():
 
 def test_supercharge_at_once_while_boosting_when_the_bar_fills():
     g = Game(); g.tick(); g.boosting(True); g.set_amt(390.0)
-    award(g, 0x2CE9B8, 100.0)                            # bar reaches the top while R1 is held
+    award(g, OTHER_RA, 100.0)                            # bar reaches the top while R1 is held
     g.tick()
     assert g.super() == 1 and g.msgs() == [cave.M_SUPER] and g.names().count("gain") == 1
     g.drain(); g.tick(); g.drain()                       # supercharge-boosting continues (refill pause first)
@@ -665,7 +670,7 @@ def test_supercharge_at_once_while_boosting_when_the_bar_fills():
 
 
 def test_bar_kept_full_by_the_game_supercharges():
-    g = Game(); g.tick(); g.boosting(True); award(g, 0x2CE9B8, 1.0)   # earned once
+    g = Game(); g.tick(); g.boosting(True); award(g, OTHER_RA, 1.0)   # earned once
     for _ in range(3):
         g.set_amt(400.0); g.tick()                       # topped up every frame
     assert g.super() == 1 and g.msgs().count(cave.M_SUPER) == 1
@@ -690,8 +695,8 @@ def prompt_hud(g, timer):
     hud = 0x65000
     g.cpu.m.w32(hud + 0x214, CAR); g.cpu.m.wf32(hud + 0x220, timer); g.cpu.m.w32(hud + 0x21C, 0x11)
     seen = []
-    g.cpu.stubs[0x16D378] = lambda cpu: seen.append("after")
-    g.cpu.stubs[0x16D36C] = lambda cpu: seen.append("count")
+    g.cpu.stubs[T(0x16D378)] = lambda cpu: seen.append("after")
+    g.cpu.stubs[T(0x16D36C)] = lambda cpu: seen.append("count")
     g.cpu.cc = timer > 5.0                                # the c.olt.s 5.0 < timer done by the game
     g.run("PROMPT", s1=hud)
     return hud, seen
@@ -716,7 +721,7 @@ def test_bar_kept_full_while_boosting_never_hits_exact_max_still_supercharges():
     """Per frame: award (clamped to max), then the game's drain, then TICK -> the bar sits at max - drain."""
     g = Game(); g.tick(); g.boosting(True); g.set_amt(399.0)
     for f in range(30):
-        award(g, 0x2CE9B8, 1.0)                            # continuous earning (>= drain)
+        award(g, OTHER_RA, 1.0)                            # continuous earning (>= drain)
         g.drain()                                          # 10 u/s -> 0.17 below max at TICK time
         assert g.super() or g.amt() < 400.0
         g.tick()

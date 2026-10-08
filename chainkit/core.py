@@ -1,9 +1,9 @@
 """ChainKit core: put the Burnout Chain mod (Burnout Dominator's supercharge and Burnout chain) on a Burnout Revenge
-PAL ISO, change the settings of an ISO that already has it, check the result.
+ISO (Europe SLES-53507 or USA SLUS-21242), change the settings of an ISO that already has it, check the result.
 
 Always writes a NEW image (the source is only read):
     boot ELF            code + data in the top of the unused .sndata hole, hooks, PCSX2 CRC kept (elfpatch)
-    MAIN{UK,FR,GE}.BIN  the HUD message texts (assets.TEXTS)
+    MAIN{UK,FR,GE,US}.BIN  the HUD message texts (assets.TEXTS)
     DATA/GLOBAL.TXD     Dominator's Boost_Arrow in place of the online TalkIcon (same size and format) when you give
                         your own Burnout Dominator image; without it the arrows use Revenge's own chevron
 Works on the original disc and on MusicKit / CarKit output (run MusicKit before ChainKit).
@@ -11,16 +11,17 @@ Works on the original disc and on MusicKit / CarKit output (run MusicKit before 
 import hashlib
 import os
 
-from . import assets, cave, elfpatch, iso, settings
+from . import assets, cave, elfpatch, iso, regions, settings
 from .elf import Elf, crc
 
-PAL_ELF = "/SLES_535.07"
-USA_ELF = "/SLUS_212.42"
+PAL_ELF = regions.PAL["elf"]
+USA_ELF = regions.USA["elf"]
+REVENGE_ELFS = tuple(regions.REGIONS)
+SUPPORTED = "Europe / PAL (SLES-53507) or USA / NTSC (SLUS-21242)"
 SLOT_DOMINATOR, SLOT_CHEVRON = 28, 12
-# MusicKit (PAL): playlist struct, original song table, table in the hole
-MK_PLAYLIST, MK_TABLE_OLD, MK_TABLE_NEW, MK_SONGS = 0x460640, 0x460450, 0x4A3680, 41
-# CarKit changes these words of the PAL executable
-CARKIT_WORDS = {0x134D68: 0x3C02004B, 0x134D6C: 0xAFA3000C, 0x134D70: 0x2451DE38, 0x134D74: 0x24100002}
+# MusicKit: playlist struct, original song table (PAL addresses, translated per build), 41 original songs
+MK_PLAYLIST, MK_TABLE_OLD, MK_SONGS = 0x460640, 0x460450, 41
+CARKIT_SITE = 0x134D68                 # CarKit changes the 4 words from here (PAL address)
 
 
 class KitError(Exception):
@@ -53,36 +54,37 @@ def _open(path, what="ISO"):
         raise KitError("%s is not a PS2 DVD image (%s)" % (os.path.basename(path), exc))
 
 
-def elf_facts(elf):
+def elf_facts(elf, region=None):
     """Other kits on the executable: MusicKit (song table moved into the hole), CarKit (car code changed), and a
     song list broken by running MusicKit after ChainKit (MusicKit then sees the hole already opened, skips its own
     code changes and only raises the song count of the original 41-song table)."""
+    region = region or elfpatch.region_of(elf)
     e = Elf(elf)
     ph = e.phdrs()
     hole_open = ph[0][2] + ph[0][4] == ph[1][2]
-    count, table = e.r32(MK_PLAYLIST + 4), e.r32(MK_PLAYLIST + 0x4C)
-    return dict(hole_open=hole_open, songs=count, musickit=hole_open and table == MK_TABLE_NEW,
-                music_broken=table == MK_TABLE_OLD and count != MK_SONGS,
-                carkit=any(e.r32(a) != w for a, w in CARKIT_WORDS.items()))
+    pl = regions.t(region, MK_PLAYLIST)
+    count, table = e.r32(pl + 4), e.r32(pl + 0x4C)
+    site = regions.t(region, CARKIT_SITE)
+    return dict(hole_open=hole_open, songs=count, musickit=hole_open and table == region["mk_table_new"],
+                music_broken=table == regions.t(region, MK_TABLE_OLD) and count != MK_SONGS,
+                carkit=any(e.r32(site + 4 * k) != w for k, w in enumerate(region["carkit_orig"])))
 
 
 class Disc:
-    """A Burnout Revenge PAL image: what is on it (mod applied? its settings, other kits)."""
+    """A Burnout Revenge image (Europe or USA): what is on it (mod applied? its settings, other kits)."""
 
     def __init__(self, path):
         self.path = path
         self.img = _open(path)
         try:
             self.elf_path = boot_elf(self.img)
-            if self.elf_path == USA_ELF:
-                raise KitError("this is the USA version of Burnout Revenge (SLUS-21242). ChainKit supports the PAL "
-                               "version (SLES-53507) only for now.")
-            if self.elf_path != PAL_ELF or PAL_ELF not in self.img.entries:
-                raise KitError("not Burnout Revenge PAL (boot file %s). ChainKit needs Burnout Revenge PAL "
-                               "(SLES-53507)." % (self.elf_path or "missing"))
+            if self.elf_path not in REVENGE_ELFS or self.elf_path not in self.img.entries:
+                raise KitError("not Burnout Revenge for PS2 (boot file %s). ChainKit needs Burnout Revenge %s."
+                               % (self.elf_path or "missing", SUPPORTED))
+            self.region = regions.REGIONS[self.elf_path]
             self.elf = self.img.read_file(self.elf_path)
             self.crc = crc(self.elf)
-            if self.crc != elfpatch.PAL_CRC:
+            if self.crc != self.region["crc"]:
                 raise KitError("the game executable was changed by another tool (CRC %08X); ChainKit needs it as "
                                "on the disc or as MusicKit / CarKit leave it" % self.crc)
             self.applied = elfpatch.is_applied(self.elf)
@@ -91,7 +93,7 @@ class Disc:
             if self.applied and self.version == cave.VERSION:
                 self.values = settings.check(elfpatch.read_tunables(self.elf))
             self.langs = [l for l in assets.LANGS if assets.STRING_FILES[l] in self.img.entries]
-            self.__dict__.update(elf_facts(self.elf))
+            self.__dict__.update(elf_facts(self.elf, self.region))
         except Exception:
             self.close()
             raise
@@ -119,7 +121,7 @@ class Disc:
         return out
 
     def summary(self):
-        s = "Burnout Revenge PAL" + (" with the Burnout Chain mod" if self.applied else "")
+        s = "Burnout Revenge %s" % self.region["short"] + (" with the Burnout Chain mod" if self.applied else "")
         extra = [k for k, on in (("MusicKit songs (%d)" % self.songs, self.musickit), ("CarKit cars", self.carkit))
                  if on]
         return s + (" + " + ", ".join(extra) if extra else "")
@@ -151,7 +153,7 @@ def dominator_txd(path):
                 continue
     finally:
         img.f.close()
-    if boot in (PAL_ELF, USA_ELF):
+    if boot in REVENGE_ELFS:
         raise KitError("that is a Burnout Revenge image; the arrow art comes from Burnout Dominator")
     raise KitError("no Boost_Arrow texture found - is this a Burnout Dominator disc image?")
 

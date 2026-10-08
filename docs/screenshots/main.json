@@ -5,7 +5,7 @@
  "dominator_ok": true,
  "disc": {
   "path": "Burnout Revenge (Europe) (En,Fr,De).iso",
-  "summary": "Burnout Revenge PAL",
+  "summary": "Burnout Revenge Europe",
   "applied": false,
   "values": null,
   "problems": [],
@@ -26,7 +26,7 @@
  ],
  "log": [
   "--- open ISO",
-  "Burnout Revenge (Europe) (En,Fr,De).iso: Burnout Revenge PAL",
+  "Burnout Revenge (Europe) (En,Fr,De).iso: Burnout Revenge Europe",
   "--- check Dominator ISO",
   "Burnout Dominator ISO: arrow art found"
  ]

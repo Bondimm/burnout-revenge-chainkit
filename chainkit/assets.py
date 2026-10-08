@@ -14,7 +14,9 @@ TEXTS = {
 }
 # one line, no second line under the award sign (it overlapped the stars)
 TEXTS["BigMessageBurnoutWowPart1"] = {"UK": "BURNOUT! WOW", "FR": "BURNOUT ! WOW", "GE": "BURNOUT! WOW"}
-LANGS = ("UK", "FR", "GE")
+for _t in TEXTS.values():          # USA disc: MAINUS.BIN (English, same texts)
+    _t["US"] = _t["UK"]
+LANGS = ("UK", "FR", "GE", "US")
 STRING_FILES = {lang: "/LANGUAGE/STRINGS/MAIN%s.BIN" % lang for lang in LANGS}
 
 

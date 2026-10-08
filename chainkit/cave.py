@@ -1,21 +1,23 @@
 """The Burnout Chain code cave (Dominator boost rules for Burnout Revenge), generated with the mips DSL.
 
-Everything lives in the top of the 16 KB .sndata hole (PAL 0x4A3678..0x4A7680): data at DATA, the relocated HUD
-message table at MSGTAB, code at CODE. MusicKit uses the bottom of the hole (song table at 0x4A3680, <= 1200 bytes).
-Every patched address is listed in hooks() below; README.md explains the rules in plain words.
+Everything lives in the top of the 16 KB .sndata hole (PAL 0x4A3678..0x4A7680, USA 0x4A34F8..0x4A7500): data at
+REGION, the relocated HUD message table at MSGTAB, code at CODE. MusicKit uses the bottom of the hole (its song
+table, <= 1200 bytes). Every patched address is listed in hooks() below; README.md explains the rules in plain words.
+The code is written with PAL addresses; Layout(region) translates them for the USA build (regions.py).
 """
 import struct
 
+from . import regions
 from .mips import Asm, f2u, hi16, lo16
 
 # ------------------------------------------------------------------------------------------- game addresses
-PAL = dict(
+PAL_ADDRS = dict(
     # boost class (Revenge FUN_002a3a00 family) and hook return points
     STOP=0x2A4288, STOPREQ=0x2A4180, GROW=0x2A3FA0, SHRINK_ORIG=0x2A3FD0, TICK_ORIG=0x2A2560,
     ADD_RET=0x2A3F10, DRAIN_RET=0x2A3AA8, TAKEDOWN_SKIP=0x114AB8, TINT_RET=0x15E3C0, LABELFN=0x15DB48,
     # globals
     CRASHFLAG=0x54BB9F, NCARS=0x1ED82B4, CARPTRS=0x1ED82C0, DT=0x1D618CC,
-    HUDBASE=0x1C02720, MSG_SEND=0x16D668, FMT=0x4510D0, SEG_STR=0x4AF460,
+    HUDBASE=0x1C02720, MSG_SEND=0x16D668,
     SND_OBJ=0x1C89430, SND_GAIN=0x236D78, SND_LOSE=0x236E30,
     TBL_SIZES=0x4670D0, TBL_MULT=0x4670E0, TBL_RATE=0x4670F0, MINBOOST=0x4670C0,
     SETTEX=0x323528, QUAD=0x324418, BARCOL=0x1C021D0, LABELTXT=0x1C02388,
@@ -23,9 +25,19 @@ PAL = dict(
     EVENT=0x1C10E98,                 # current event; +0x20 = event type (10 = Burning Lap)
     HUDTEX=0x1F67490,                # 30 HUD texture pointers (name table 0x4AFD40); 28 = TalkIcon, 12 = chev_sml
     MSGTAB_OLD=0x45CE78, MSG_COUNT=190,
-    # hole layout
-    HOLE_START=0x4A3678, HOLE_END=0x4A7680, REGION=0x4A4000, CODE=0x4A5000,
 )
+NOT_ADDRESSES = {"MSG_COUNT"}
+
+
+def addresses(region=regions.PAL):
+    """PAL_ADDRS translated for `region`, plus the hole layout (data 0x3680 and code 0x2680 below the hole end)."""
+    a = {k: (v if k in NOT_ADDRESSES else regions.t(region, v)) for k, v in PAL_ADDRS.items()}
+    lo, hi = region["hole"]
+    a.update(HOLE_START=lo, HOLE_END=hi, REGION=hi - 0x3680, CODE=hi - 0x2680)
+    return a
+
+
+PAL = addresses(regions.PAL)
 
 # car / boost object fields
 C_CTRL, C_IDX, C_SPEED, C_TIME, C_BOOST, C_HUDCAR = 0x2C10, 0x3B20, 0x54, 0x24EC, 0x2430, 0x6AC
@@ -150,14 +162,19 @@ M_SUPER, M_BURNOUT, M_LOST, M_DOMI, M_WOW = 0x74, 0x75, 0x76, 0x77, 0x78
 
 
 class Layout:
-    def __init__(self, a=PAL):
-        self.a = a
+    def __init__(self, region=regions.PAL):
+        self.region = region
+        self.a = a = addresses(region)
         R = a["REGION"]
         self.state, self.g, self.labelbuf, self.msgbuf = R + STATE, R + G, R + LABELBUF, R + MSGBUF
         self.names, self.msgtab, self.code = R + NAMES, R + MSGTAB, a["CODE"]
         self.msg_count = a["MSG_COUNT"] + len(NEW_MESSAGES)
         assert self.msgtab + 12 * self.msg_count <= self.code
         self.burnout_entry = self.msgtab + 12 * (a["MSG_COUNT"] + 1)   # NEW_MESSAGES[1]
+
+    def t(self, pal_addr):
+        """Address in this build of what is at `pal_addr` in the PAL build."""
+        return regions.t(self.region, pal_addr)
 
 
 def parse_colour(v):
@@ -204,12 +221,12 @@ def build_data(lay, old_table, tunables=None):
     for k, (n, off, u, w) in enumerate(SKILLS):
         w32(R + SKILL_OFFS + 4 * k, off)
     for k, (ra_, kind) in enumerate(AWARD_SITES):
-        w32(R + AWARD_TABLE + 8 * k, ra_); w32(R + AWARD_TABLE + 8 * k + 4, kind)
+        w32(R + AWARD_TABLE + 8 * k, lay.t(ra_)); w32(R + AWARD_TABLE + 8 * k + 4, kind)
     assert AWARD_TABLE + 8 * len(AWARD_SITES) <= AWARD_FILL and AWARD_FILL + 4 * AWARD_KINDS <= AWARD_ARROWS
     k = 0
     for bit, key, vts in MODES:
         for vt in vts:
-            w32(R + MODE_TAB + 8 * k, vt); w32(R + MODE_TAB + 8 * k + 4, 1 << bit); k += 1
+            w32(R + MODE_TAB + 8 * k, lay.t(vt)); w32(R + MODE_TAB + 8 * k + 4, 1 << bit); k += 1
     assert R + MODE_TAB + 8 * k + 4 <= lay.code
     # message names + table
     p = lay.names
@@ -320,6 +337,7 @@ class CaveAsm(Asm):
 
 def build_code(lay):
     A = lay.a
+    TR = lay.t
     a = CaveAsm(lay)
     T = G_TUNE
 
@@ -365,7 +383,7 @@ def build_code(lay):
     a.swc1("f0", S_ARROWS, "t8")
     a.label("TR_out")
     a.lwc1("f0", 4, "a1")                                               # original 2nd instruction
-    a.j(0x2C8910); a.nop()
+    a.j(TR(0x2C8910)); a.nop()
 
     a.label("ADD")
     a.lw("t9", B_CAR, "s0")
@@ -445,14 +463,14 @@ def build_code(lay):
     a.label("S_fl")
     a.c_lt_s("f1", "f2"); a.bc1f("S_st"); a.nop(); a.mov_s("f1", "f2")
     a.label("S_st")
-    a.swc1("f1", B_AMT, "s0"); a.j(0x2A3F8C); a.nop()          # original epilogue
+    a.swc1("f1", B_AMT, "s0"); a.j(TR(0x2A3F8C)); a.nop()          # original epilogue
     a.label("S_idle")
     a.mem("swc1", "f12", a.gaddr(G_FSAVE), "t1")
     a.move("a0", "t8"); a.jal("LOSE"); a.move("a1", "t9")
     a.mem("lwc1", "f12", a.gaddr(G_FSAVE), "t1")
     a.label("S_orig")
     a.lwc1("f0", B_MULT, "s0"); a.lwc1("f1", B_AMT, "s0")      # replaced 0x2A3F50 + its delay slot copy
-    a.j(0x2A3F58); a.nop()
+    a.j(TR(0x2A3F58)); a.nop()
 
     # ---------------------------------------------------------------- helpers: a0 = state, a1 = car
     REGS3 = ["ra", "s0", "s1"]
@@ -705,15 +723,15 @@ def build_code(lay):
     # Mod cars never get it (they wait for the supercharge on purpose); Crash mode / AI / online stay vanilla.
     a.label("PROMPT")
     a.bc1t("PR_chk"); a.nop()
-    a.j(0x16D36C); a.nop()                                   # timer <= 5 s: original path (v0 set in delay slot)
+    a.j(TR(0x16D36C)); a.nop()                                   # timer <= 5 s: original path (v0 set in delay slot)
     a.label("PR_chk")
     a.lw("t9", 0x214, "s1"); a.beqz("t9", "PR_orig"); a.nop()
     a.addiu("t8", "t9", C_BOOST)
     a.active("t9", "t8", "PR_orig")
     a.mem("lw", "t0", a.gaddr(T + 0x24), "t0"); a.andi("t0", "t0", FL_SHOWHINT); a.bnez("t0", "PR_orig"); a.nop()
-    a.sw("zero", 0x220, "s1"); a.j(0x16D378); a.nop()       # no prompt, restart the timer
+    a.sw("zero", 0x220, "s1"); a.j(TR(0x16D378)); a.nop()       # no prompt, restart the timer
     a.label("PR_orig")
-    a.sw("zero", 0x21C, "s1"); a.sw("zero", 0x220, "s1"); a.j(0x16D378); a.nop()
+    a.sw("zero", 0x21C, "s1"); a.sw("zero", 0x220, "s1"); a.j(TR(0x16D378)); a.nop()
 
     # ---------------------------------------------------------------- SHRINK (jal from 0x11A2DC, the wreck handler)
     # FUN_0011a280 shrinks the bar one segment on a wreck (FUN_002a3fd0). With the fixed full bar a mod car keeps
@@ -886,8 +904,9 @@ def build_code(lay):
 
 # ------------------------------------------------------------------------------------------------ hooks
 def hooks(lay, labels):
-    """[(vaddr, original word, new word, meaning)] for the PAL executable."""
+    """[(vaddr, original word, new word, meaning)] for the executable of lay.region (PAL addresses translated)."""
     A = lay.a
+    TR = lay.t
     J = lambda t: (2 << 26) | ((t >> 2) & 0x3FFFFFF)
     JAL = lambda t: (3 << 26) | ((t >> 2) & 0x3FFFFFF)
     L = labels
@@ -895,7 +914,8 @@ def hooks(lay, labels):
     mt = lay.msgtab
     hi, lo = hi16(mt), lo16(mt)
     last = 12 * (n - 1)
-    return [
+    mo, lt = A["MSGTAB_OLD"], A["LABELTXT"]
+    raw = [
         (0x2A3EC4, 0x50A00009, 0x50A00008, "beql a1,zero -> 0x2A3EE8 (into the ADD jump)"),
         (0x2A3EE8, 0xC6000040, J(L["ADD"]), "j ADD (add boost: fill_mult; nothing while supercharged)"),
         (0x2C8908, 0x0080282D, J(L["TRACK"]), "j TRACK (skill-list tracker update -> arrows)"),
@@ -904,24 +924,25 @@ def hooks(lay, labels):
         (0x2A3A98, 0xC6010040, J(L["DRAIN"]), "j DRAIN (x3 drain when supercharged)"),
         (0x2A3F50, 0xC6000050, J(L["SUB"]), "j SUB (boost loss: floor at half while supercharge-boosting)"),
         (0x2A3A9C, 0x46001002, 0x00000000, "nop"),
-        (0x2A3E0C, 0x0C0A90A2, JAL(L["EMPTY"]), "jal EMPTY (bar empty -> burnout refill / release -> lose)"),
-        (0x2A3E3C, 0x0C0A8958, JAL(L["TICK"]), "jal TICK (per-car frame update)"),
-        (0x114A9C, 0x0C0A8FE8, JAL(L["TAKEDOWN"]), "jal TAKEDOWN (takedown while supercharge-boosting = all arrows)"),
-        (0x11A2DC, 0x0C0A8FF4, JAL(L["SHRINK"]), "jal SHRINK (wreck: supercharge lost, no bar shrink)"),
-        (0x1DC944, 0x0C0A9060, JAL(L["RELEASE"]), "jal RELEASE (boost button released, input path 1)"),
+        (0x2A3E0C, JAL(A["STOP"]), JAL(L["EMPTY"]), "jal EMPTY (bar empty -> burnout refill / release -> lose)"),
+        (0x2A3E3C, JAL(A["TICK_ORIG"]), JAL(L["TICK"]), "jal TICK (per-car frame update)"),
+        (0x114A9C, JAL(A["GROW"]), JAL(L["TAKEDOWN"]), "jal TAKEDOWN (takedown while supercharge-boosting = all arrows)"),
+        (0x11A2DC, JAL(A["SHRINK_ORIG"]), JAL(L["SHRINK"]), "jal SHRINK (wreck: supercharge lost, no bar shrink)"),
+        (0x1DC944, JAL(A["STOPREQ"]), JAL(L["RELEASE"]), "jal RELEASE (boost button released, input path 1)"),
         (0x16D358, 0x45000004, J(L["PROMPT"]), "j PROMPT (no PRESS R1 TO BOOST hint for mod cars)"),
-        (0x204E98, 0x0C0A9060, JAL(L["RELEASE"]), "jal RELEASE (boost button released, input path 2)"),
+        (0x204E98, JAL(A["STOPREQ"]), JAL(L["RELEASE"]), "jal RELEASE (boost button released, input path 2)"),
         (0x15E3B8, 0x27BDF780, J(L["TINT"]), "j TINT (blue boost bar while supercharged)"),
         (0x15E3BC, 0x7FB00810, 0x27BDF780, "addiu sp,sp,-0x880 (moved into the delay slot)"),
-        (0x15F09C, 0x0C0576D2, JAL(L["HUDLBL"]), "jal HUDLBL (chain label + arrows)"),
-        (0x15DCE4, 0x3C0801C0, 0x3C080000 | hi16(lay.g + G_LABELPTR), "lui t0,%hi(label pointer)"),
-        (0x15DCF4, 0x25082388, 0x8D080000 | lo16(lay.g + G_LABELPTR), "lw t0,%lo(label pointer)(t0)"),
+        (0x15F09C, JAL(A["LABELFN"]), JAL(L["HUDLBL"]), "jal HUDLBL (chain label + arrows)"),
+        (0x15DCE4, 0x3C080000 | hi16(lt), 0x3C080000 | hi16(lay.g + G_LABELPTR), "lui t0,%hi(label pointer)"),
+        (0x15DCF4, 0x25080000 | lo16(lt), 0x8D080000 | lo16(lay.g + G_LABELPTR), "lw t0,%lo(label pointer)(t0)"),
         (0x15DD0C, 0x00484021, 0x00000000, "nop (was addu t0,v0,t0)"),
         # HUD message table relocation (3 functions: lui, addiu base, addiu last entry, loop count)
-        (0x16FCFC, 0x3C020046, 0x3C020000 | hi, "msg table hi"), (0x16FD0C, 0x2442CE78, 0x24420000 | lo, "msg table lo"),
+        (0x16FCFC, 0x3C020000 | hi16(mo), 0x3C020000 | hi, "msg table hi"), (0x16FD0C, 0x24420000 | lo16(mo), 0x24420000 | lo, "msg table lo"),
         (0x16FD1C, 0x245108DC, 0x24510000 | last, "last entry"), (0x16FD24, 0x241300BD, 0x24130000 | (n - 1), "count-1"),
-        (0x16FDD8, 0x3C020046, 0x3C020000 | hi, "msg table hi"), (0x16FDE0, 0x2442CE78, 0x24420000 | lo, "msg table lo"),
+        (0x16FDD8, 0x3C020000 | hi16(mo), 0x3C020000 | hi, "msg table hi"), (0x16FDE0, 0x24420000 | lo16(mo), 0x24420000 | lo, "msg table lo"),
         (0x16FDE8, 0x244308DC, 0x24430000 | last, "last entry"), (0x16FDE4, 0x240700BD, 0x24070000 | (n - 1), "count-1"),
-        (0x16FED4, 0x3C020046, 0x3C020000 | hi, "msg table hi"), (0x16FEEC, 0x2442CE78, 0x24420000 | lo, "msg table lo"),
+        (0x16FED4, 0x3C020000 | hi16(mo), 0x3C020000 | hi, "msg table hi"), (0x16FEEC, 0x24420000 | lo16(mo), 0x24420000 | lo, "msg table lo"),
         (0x16FEF4, 0x244508DC, 0x24450000 | last, "last entry"), (0x16FEE8, 0x240600BD, 0x24060000 | (n - 1), "count-1"),
     ]
+    return [(TR(va), old, new, what) for va, old, new, what in raw]

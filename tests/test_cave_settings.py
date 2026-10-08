@@ -1,7 +1,12 @@
 """Cave code: the kit settings (per-mode switches, per-action factors, label / hint switches, takedown arrows)."""
+import importlib
+
 import pytest
 
-from test_cave import A, BOOST, CAR, LAY, TUNE, Game, award, cave, prompt_hud, supercharged
+# test_cave_usa.py loads this file with BASE_MODULE = the USA copy of test_cave
+_base = globals().get("BASE_MODULE") or importlib.import_module("test_cave")
+A, BOOST, CAR, LAY, TUNE, T, Game, award, cave, prompt_hud, supercharged = (getattr(_base, n) for n in (
+    "A", "BOOST", "CAR", "LAY", "TUNE", "T", "Game", "award", "cave", "prompt_hud", "supercharged"))
 
 MODE_OBJ = 0x5A000
 
@@ -25,8 +30,9 @@ def mode_bit(key):
     return {k: 1 << b for b, k, _ in cave.MODES}[key]
 
 
-VT = {"race": 0x49EB20, "road_rage": 0x49E750, "burning": 0x49DBF8, "eliminator": 0x49E388,
-      "traffic_attack": 0x49D820, "splitscreen": 0x49B5D0, "online_race": 0x49B208, "unknown": 0x49DFC0}
+VT = {"race": T(0x49EB20), "road_rage": T(0x49E750), "burning": T(0x49DBF8), "eliminator": T(0x49E388),
+      "traffic_attack": T(0x49D820), "splitscreen": T(0x49B5D0), "online_race": T(0x49B208),
+      "unknown": 0x49DFC0}        # (a mode class not in the table)
 
 
 def is_vanilla(g):
@@ -92,8 +98,8 @@ def test_show_press_r1_hint_switch():
 
 
 # ------------------------------------------------------------------------------------------- per-action factors
-NEW_KINDS = {"air": 0x2CC15C, "crash_escape": 0x2CAF34, "tailgating": 0x2CB370, "grinding": 0x2CCB18,
-             "near_miss": 0x2CEDAC, "checked_traffic": 0x2CCD20}
+NEW_KINDS = {"air": T(0x2CC15C), "crash_escape": T(0x2CAF34), "tailgating": T(0x2CB370), "grinding": T(0x2CCB18),
+             "near_miss": T(0x2CEDAC), "checked_traffic": T(0x2CCD20)}
 
 
 @pytest.mark.parametrize("name,ra", sorted(NEW_KINDS.items()))

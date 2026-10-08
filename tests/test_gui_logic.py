@@ -99,7 +99,7 @@ def test_state_is_remembered(g):
 
 def test_demo_mode_reads_no_file(g):
     d = gui.ChainKitGui(g.log, {"demo": {"disc": {
-        "path": "Burnout Revenge (Europe).iso", "summary": "Burnout Revenge PAL", "applied": True,
+        "path": "Burnout Revenge (Europe).iso", "summary": "Burnout Revenge Europe", "applied": True,
         "values": settings.to_json(settings.DEFAULTS)["settings"], "problems": [], "arrow_art": "dominator",
         "musickit": False, "carkit": False, "songs": 41, "crc": 0x7E83CC5B, "langs": ["UK"]}},
         "out": "Burnout Revenge (Europe) (Burnout Chain settings).iso"})

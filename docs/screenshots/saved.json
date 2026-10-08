@@ -5,7 +5,7 @@
  "dominator_ok": true,
  "disc": {
   "path": "Burnout Revenge (Europe) (En,Fr,De).iso",
-  "summary": "Burnout Revenge PAL",
+  "summary": "Burnout Revenge Europe",
   "applied": false,
   "values": null,
   "problems": [],
@@ -25,11 +25,11 @@
  ],
  "log": [
   "--- open ISO",
-  "Burnout Revenge (Europe) (En,Fr,De).iso: Burnout Revenge PAL",
+  "Burnout Revenge (Europe) (En,Fr,De).iso: Burnout Revenge Europe",
   "--- check Dominator ISO",
   "Burnout Dominator ISO: arrow art found",
   "--- save new ISO",
-  "source: Burnout Revenge (Europe) (En,Fr,De).iso (Burnout Revenge PAL)",
+  "source: Burnout Revenge (Europe) (En,Fr,De).iso (Burnout Revenge Europe)",
   "arrow texture: Burnout Dominator's Boost_Arrow",
   "executable: 33 hooks, code 0x4a5000-0x4a69ac, PCSX2 CRC 7E83CC5B kept",
   "HUD texts: UK, FR, GE",

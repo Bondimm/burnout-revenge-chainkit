@@ -4,7 +4,7 @@
  "out": "Burnout Revenge (Europe) (En,Fr,De) (Burnout Chain settings).iso",
  "disc": {
   "path": "Burnout Revenge (Europe) (En,Fr,De) (Burnout Chain).iso",
-  "summary": "Burnout Revenge PAL with the Burnout Chain mod",
+  "summary": "Burnout Revenge Europe with the Burnout Chain mod",
   "applied": true,
   "values": {
    "arrow_gain": 1.0,
@@ -139,6 +139,6 @@
  ],
  "log": [
   "--- open ISO",
-  "Burnout Revenge (Europe) (En,Fr,De) (Burnout Chain).iso: Burnout Revenge PAL with the Burnout Chain mod - its settings are loaded (Default (tested)); change them and save a new ISO"
+  "Burnout Revenge (Europe) (En,Fr,De) (Burnout Chain).iso: Burnout Revenge Europe with the Burnout Chain mod - its settings are loaded (Default (tested)); change them and save a new ISO"
  ]
 }

@@ -213,7 +213,7 @@ class ChainKitGui:
         self.disc_error = None
         self.last_save = None
         if not path:
-            self.disc_error = "Choose your Burnout Revenge ISO (PAL, SLES-53507) with Browse..."
+            self.disc_error = "Choose your Burnout Revenge ISO (Europe SLES-53507 or USA SLUS-21242) with Browse..."
             return
         if not os.path.isfile(path):
             self.disc_error = "ISO not found"
@@ -296,7 +296,7 @@ class ChainKitGui:
             from . import iso
             img = iso.IsoImage(path)
             try:
-                return core.boot_elf(img) not in (core.PAL_ELF, core.USA_ELF)
+                return core.boot_elf(img) not in core.REVENGE_ELFS
             finally:
                 img.f.close()
         except Exception:
@@ -394,7 +394,7 @@ class ChainKitGui:
 
     def pick_iso(self):
         from imgui_bundle import portable_file_dialogs as pfd
-        self.open_dialog(pfd.open_file("Select your Burnout Revenge ISO (PAL)", self._start(self.iso_path),
+        self.open_dialog(pfd.open_file("Select your Burnout Revenge ISO", self._start(self.iso_path),
                                        ISO_FILTERS), lambda r: r and self.load_disc(r[0]))
 
     def pick_dominator(self):
@@ -436,7 +436,7 @@ class ChainKitGui:
         imgui.begin("main", None, flags)
         U.text(ACCENT, "ChainKit")
         imgui.same_line()
-        U.text(GREY, "Burnout Dominator's supercharge and Burnout chain for Burnout Revenge (PS2, PAL)")
+        U.text(GREY, "Burnout Dominator's supercharge and Burnout chain for Burnout Revenge (PS2, Europe and USA)")
         imgui.separator()
         avail = imgui.get_content_region_avail()
         imgui.begin_child("left", imgui.ImVec2(avail.x * 0.42, avail.y - 4))
@@ -476,7 +476,8 @@ class ChainKitGui:
                          "(CRC %08X kept), so widescreen and other patches keep working." % d.crc)
         elif self.disc_error and not (busy and self.job.title == "open ISO"):
             U.text(RED if os.path.exists(self.iso_path or "") or self.iso_path else GREY, self.disc_error)
-        U.text(GREY, "PAL only (SLES-53507). With MusicKit: run MusicKit first, then ChainKit on its new ISO.")
+        U.text(GREY, "Europe (SLES-53507) or USA (SLUS-21242). With MusicKit: run MusicKit first, then ChainKit "
+                     "on its new ISO.")
         # ---- 2
         U.step(2, "Arrow art: your Burnout Dominator ISO (optional)", self.dom_ok)
         imgui.begin_disabled(busy)

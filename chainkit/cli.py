@@ -64,7 +64,7 @@ def _value_args(p):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="chainkit", description="Burnout Dominator's supercharge and Burnout chain for "
-                                 "Burnout Revenge (PS2, PAL). Always writes a new ISO.")
+                                 "Burnout Revenge (PS2, Europe and USA). Always writes a new ISO.")
     sub = ap.add_subparsers(dest="cmd")
     p = sub.add_parser("build", help="new ISO with the mod")
     p.add_argument("--iso", required=True); p.add_argument("--out"); _value_args(p)
