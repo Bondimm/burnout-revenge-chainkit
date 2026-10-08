@@ -82,7 +82,7 @@ def test_hooks_per_build():
     for r in (regions.PAL, regions.USA):
         lay = cave.Layout(r)
         hk = cave.hooks(lay, cave.build_code(lay)[1])
-        assert len(hk) == 34 and len({va for va, *_ in hk}) == 34
+        assert len(hk) == 36 and len({va for va, *_ in hk}) == 36
     usa = cave.Layout(regions.USA)
     hk = {va: old for va, old, new, what in cave.hooks(usa, cave.build_code(usa)[1])}
     assert hk[0x2A3CF4] == (3 << 26) | (0x2A4170 >> 2)                  # jal stop, translated
@@ -148,3 +148,15 @@ def test_pad_controller_layout_same_in_both_builds(elfs):
         assert e.r32(site + 0xC) == 0x8E040000 | cave.P_CAR            # lw a0, 0x2E80(s0) after the call
         held = regions.t(regions.BY_KEY[key], 0x1F2220)
         assert 0x90821388 in [e.r32(held + 4 * k) for k in range(24)]  # lbu v0, 0x1388(a0): the pad bits
+
+
+@both
+def test_pad_query_used_by_the_controller_in_both_builds(elfs):
+    """PADHELD calls FUN_00111b80(**(car + 0x37B0)) like the pad controller does before its 'boost held' query."""
+    for elf, key in zip(elfs, ("PAL", "USA")):
+        e = Elf(elf)
+        r = regions.BY_KEY[key]
+        site = regions.t(r, 0x204E4C)
+        win = [e.r32(site - 4 * k) for k in range(1, 200)]
+        assert (3 << 26) | (regions.t(r, 0x111B80) >> 2) in win, key
+        assert 0x8CA20000 | cave.C_PAD in win, key                     # lw v0, 0x37B0(a1)

@@ -344,18 +344,20 @@ class Cpu:
             return nxt, None
         if op == 1:
             v = sx(G(rs), 64)
-            if (rt == 0 and v < 0) or (rt == 1 and v >= 0):
+            if (rt & 1 == 0 and v < 0) or (rt & 1 == 1 and v >= 0):
                 return None, pc + 4 + (imm << 2)
-            return None, pc + 8
+            return (pc + 8, None) if rt & 2 else (None, pc + 8)      # bltzl/bgezl: delay slot skipped
         if op in (2, 3):
             t = (pc & 0xF0000000) | ((w & 0x3FFFFFF) << 2)
             if op == 3:
                 self.sr(31, pc + 8)
             return None, t
-        if op in (4, 5, 6, 7):
+        if op in (4, 5, 6, 7, 0x14, 0x15, 0x16, 0x17):
             a, b = sx(G(rs), 64), sx(G(rt), 64)
-            take = {4: a == b, 5: a != b, 6: a <= 0, 7: a > 0}[op]
-            return None, (pc + 4 + (imm << 2)) if take else pc + 8
+            take = {4: a == b, 5: a != b, 6: a <= 0, 7: a > 0}[op & 7 | 4]
+            if take:
+                return None, pc + 4 + (imm << 2)
+            return (pc + 8, None) if op >= 0x14 else (None, pc + 8)  # branch likely: delay slot skipped
         if op == 9: self.s32(rt, G(rs) + imm)
         elif op == 10: self.sr(rt, int(sx(G(rs), 64) < imm))
         elif op == 11: self.sr(rt, int(G(rs) < (imm & M64)))
@@ -392,9 +394,11 @@ class Cpu:
             fs, ft, fd = rd, rt, sa
             if fmt == 0x00: self.s32(rt, self.fr[fs])                       # mfc1
             elif fmt == 0x04: self.fr[fs] = G(rt) & 0xFFFFFFFF               # mtc1
-            elif fmt == 0x08:                                               # bc1f/bc1t
+            elif fmt == 0x08:                                               # bc1f/bc1t(/l)
                 take = self.cc if rt & 1 else not self.cc
-                return None, (pc + 4 + (imm << 2)) if take else pc + 8
+                if take:
+                    return None, pc + 4 + (imm << 2)
+                return (pc + 8, None) if rt & 2 else (None, pc + 8)
             elif fmt == 0x10:
                 a, b = self.ff(fs), self.ff(ft)
                 if fn == 0: self.sf(fd, a + b)

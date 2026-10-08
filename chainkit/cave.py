@@ -15,7 +15,8 @@ PAL_ADDRS = dict(
     # boost class (Revenge FUN_002a3a00 family) and hook return points
     STOP=0x2A4288, STOPREQ=0x2A4180, GROW=0x2A3FA0, SHRINK_ORIG=0x2A3FD0, TICK_ORIG=0x2A2560,
     ADD_RET=0x2A3F10, DRAIN_RET=0x2A3AA8, TAKEDOWN_SKIP=0x114AB8, TINT_RET=0x15E3C0, LABELFN=0x15DB48,
-    HELD=0x1F2220,                   # FUN_001f2220(pad controller): boost button held (controller+0x1388 bit 1)
+    HELD=0x1F2220,                   # FUN_001f2220(pad controller): "boost held" (controller+0x1388 bit 1)
+    PADVAL=0x111B80,                 # FUN_00111b80(pad): the boost control's value (button / trigger, any scheme)
     # globals
     CRASHFLAG=0x54BB9F, NCARS=0x1ED82B4, CARPTRS=0x1ED82C0, DT=0x1D618CC,
     HUDBASE=0x1C02720, MSG_SEND=0x16D668,
@@ -64,11 +65,12 @@ G_EMPTYW = 0xD0
 MSGBUF = 0x200           # 64 bytes: one-line "BURNOUT! x<N>" (UTF-16)
 ORIGP1 = 0x240           # saved handle of the localized BigMessageBurnoutPart1 text
 LABELBUF = 0x300         # (unused since v5)
-NAMES = 0x340            # message names (ASCII)
+NAMES = 0xEB0            # message names (ASCII; after the mode table)
 SCORN = 0x3C0            # shadow quad corners (32 bytes)
 MSGTAB = 0x400           # relocated + extended message table
 MAGIC = b"CHAINKIT"
-VERSION = 4              # 3: per-mode switches, per-action fill factors, label/hint switches; 4: BTN hook
+VERSION = 5              # 3: per-mode switches, per-action fill factors, label/hint switches; 4: BTN hook;
+                         # 5: button read from the pad, checked every frame
 
 # (name, offset in G_TUNE block, type, default, help)
 TUNABLES = [
@@ -84,7 +86,9 @@ TUNABLES = [
     ("flags", 0x24, "i", 0x5F, "bit0 popups, bit1 arrows, bit2 blue tint, bit3 sounds, bit4 slow rule, "
                                 "bit5 no earning while boosting (Dominator), bit6 force the full 400-unit bar, "
                                 "bit7 show Revenge's x2-x4 bar-size label, bit8 show the PRESS R1 TO BOOST hint, "
-                                "bit9 allow boosting without the button held (game boosts; off = only while held)"),
+                                "bit9 allow boosting without the button held (game boosts; off = only while held), "
+                                "bit10 debug pop-ups when a boost without the button is stopped, "
+                                "bit11 bar fire also while the bar fills up (Revenge)"),
     ("arrow_tex_slot", 0x28, "i", 28, "HUD texture slot used for the arrows (28 = TalkIcon -> Boost_Arrow, 12 = chev_sml)"),
     ("fill_mult", 0x2C, "f", 1.15, "boost earned when not supercharged x this (way to the blue bar; 1.0 = Revenge)"),
     ("takedown_grace", 0x248 - G - G_TUNE, "f", 5.0, "seconds after a takedown in which a boost stop (takedown camera) keeps the supercharge"),
@@ -146,7 +150,9 @@ for _k, (_n, _o, _u, _w) in enumerate(SKILLS):
     TUNABLES.append(("w_" + _n, SKILL_W - G - G_TUNE + 4 * _k, "f", _w,
                      "arrows per %s of %s (fraction of the arrow pool)" % (_u, _n.replace("_", " "))))
 FL_MSG, FL_ARROWS, FL_TINT, FL_SOUND, FL_SLOW, FL_NOEARN, FL_FULLBAR = 1, 2, 4, 8, 16, 32, 64
-FL_SHOWLABEL, FL_SHOWHINT, FL_FREEBOOST = 128, 256, 512
+FL_SHOWLABEL, FL_SHOWHINT, FL_FREEBOOST, FL_DEBUG, FL_FILLFIRE = 128, 256, 512, 1024, 2048
+H_CAR = 0x6CC            # boost-bar HUD element -> its car
+C_PAD = 0x37B0           # car -> pointer to its pad object pointer (human cars)
 P_CAR = 0x2E80           # pad controller (FUN_00204ac8's object) -> its car
 # design units of the boost bar sprite (FUN_0015daa0: 290 x 28) and the arrow row
 DESIGN = dict(w=290.0, h=28.0, x0=26.0, dx=15.9, y=14.0, aw=13.0, ah=16.0, n=16.0)
@@ -159,9 +165,10 @@ G_DESIGN = 0xE0  # w,h,x0,dx,y,aw,ah,n (32 bytes, 0xE0..0x100)
 # interrupts and overdraws them; the BURNOUT messages stay with the awards in slot 1.
 NEW_MESSAGES = [("BlueBoostAvailable", 0x74, 0x03, 0x02), ("Burnout", 0x75, 0x02, 0x03),
                 ("BurnoutLost", 0x76, 0x03, 0xFF), ("BurnoutDomination", 0x77, 0x02, 0x04),
-                ("BurnoutWow", 0x78, 0x02, 0x04)]
+                ("BurnoutWow", 0x78, 0x02, 0x04),
+                ("DebugBoostPad", 0x79, 0x03, 0x02), ("DebugBoostAuto", 0x7A, 0x03, 0x02)]
 HUD_SEGS = 0x6DE         # boost-bar HUD element + 0x6FE (displayed segments), relative to the draw context (+0x20)
-M_SUPER, M_BURNOUT, M_LOST, M_DOMI, M_WOW = 0x74, 0x75, 0x76, 0x77, 0x78
+M_SUPER, M_BURNOUT, M_LOST, M_DOMI, M_WOW, M_DBGPAD, M_DBGAUTO = 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A
 
 
 class Layout:
@@ -239,7 +246,7 @@ def build_data(lay, old_table, tunables=None):
         d[p - R:p - R + len(b)] = b
         name_ptr[name] = p
         p += (len(b) + 3) & ~3
-    assert p <= lay.msgtab
+    assert p <= lay.code and lay.names >= R + MODE_TAB + 8 * k + 4 and lay.names >= lay.msgtab + 12 * lay.msg_count
     assert len(old_table) == 12 * a["MSG_COUNT"]
     t = bytearray(old_table)
     for name, mid, b1, lvl in NEW_MESSAGES:
@@ -604,6 +611,16 @@ def build_code(lay):
     a.sw("zero", S_ANIM, "s2"); a.sw("zero", S_BEST, "s2"); a.sw("zero", S_GRACE, "s2"); a.sb("zero", S_EARNED, "s2")
     a.sb("zero", S_RELEASED, "s2"); a.sb("zero", S_PAUSED, "s2")
     a.label("T_noreset")
+    # boost only while the button is held - also while the pad controller is not asked (takedown camera,
+    # autopilot): any boost the player's boost control does not back is stopped every frame
+    a.mem("lw", "t0", a.gaddr(T + 0x24), "t0"); a.andi("t0", "t0", FL_FREEBOOST); a.bnez("t0", "T_btnok"); a.nop()
+    a.lbu("t1", B_ACTIVE, "s0"); a.beqz("t1", "T_btnok"); a.nop()
+    a.move("a0", "s1"); a.jal("PADHELD"); a.nop()
+    a.bnez("v0", "T_btnok"); a.nop()
+    a.move("a0", "s1"); a.jal("BSTOP"); a.nop()
+    a.mem("lw", "t0", a.gaddr(T + 0x24), "t0"); a.andi("t0", "t0", FL_DEBUG); a.beqz("t0", "T_btnok"); a.nop()
+    a.send_msg("s1", M_DBGAUTO)
+    a.label("T_btnok")
     # optional (flag bit6): Dominator's always-full 400-unit bar. Off by default: Revenge's own bar sizes per mode
     # (and the takedown growth / crash shrink) are kept; forcing it made the HUD play 3 segment-gain sounds.
     a.gflag(FL_FULLBAR, "T_sized")
@@ -752,38 +769,85 @@ def build_code(lay):
 
     # ---------------------------------------------------------------- RELEASE (jal from the boost-button input paths)
     # FUN_001dc2f0 @0x1DC944 and FUN_00204ac8 @0x204E98 request a stop because the boost button is not held.
-    # ---------------------------------------------------------------- BTN (jal from 0x204E4C instead of FUN_001f2220)
-    # The human pad controller asks every frame whether the boost button is held (a0 = controller, car at +0x2E80).
-    # Rule (default on, flags bit9 clear): a mod car boosts ONLY while the button is held. A boost the button does
-    # not back (Revenge's Perfect-Start latch, anything started or kept alive by the game) is stopped at once through
-    # the game's own stop (FUN_002a4288: flames, sound and camera end as usual). The supercharge rules stay: inside
-    # the takedown grace the supercharge + chain are kept (pause), otherwise letting go loses them.
-    # Returns the original answer (v0) unchanged.
-    RB = ["ra", "s0", "s1"]
+    # ---------------------------------------------------------------- boost only while the button is held
+    # Revenge's "boost held" answer (pad controller +0x1388 bit 1, FUN_001f2220) is NOT only the button: it is also
+    # set by a game flag (controller +0x7224, set by FUN_002afeb8) and by the Perfect-Start latch. And while the
+    # car is driven automatically (car +0x3B28 / +0x2CA9 states: takedown camera, autopilot) the pad controller is
+    # not asked at all. So the rule reads the player's boost control itself: FUN_00111b80(pad) (all control
+    # schemes), pad = *(car + 0x37B0), pressed above 0.1 like the game.
+    # PADHELD: a0 = car -> v0 = 1 when pressed (also 1 when the car has no pad: never stop then)
+    a.label("PADHELD")
+    a.push(0x10, ["ra"])
+    a.lw("t0", C_PAD, "a0"); a.beqz("t0", "PH_yes"); a.nop()
+    a.lw("a0", 0, "t0"); a.beqz("a0", "PH_yes"); a.nop()
+    a.jal(A["PADVAL"]); a.nop()
+    a.lif("f1", 0.1); a.c_lt_s("f1", "f0"); a.bc1t("PH_yes"); a.nop()
+    a.b("PH_ret"); a.li("v0", 0)
+    a.label("PH_yes")
+    a.li("v0", 1)
+    a.label("PH_ret")
+    a.pop(0x10, ["ra"]); a.jr("ra"); a.nop()
+
+    # BSTOP: a0 = car. Stop a boost the button does not back, through the game's own stop (FUN_002a4288: flames,
+    # sound, camera end as usual), also clearing the Perfect-Start latch. Supercharge rules stay: inside the
+    # takedown grace supercharge + chain are kept (paused), otherwise letting go loses them.
+    RS = ["ra", "s0"]
+    a.label("BSTOP")
+    a.push(0x10, RS); a.move("s0", "a0")
+    a.stateptr("s0", "t7")
+    a.lbu("t1", S_SUPER, "t7"); a.beqz("t1", "BS_stop"); a.nop()
+    a.lwc1("f0", S_GRACE, "t7"); a.mtc1("zero", "f1"); a.nop(); a.c_lt_s("f1", "f0"); a.bc1t("BS_pause"); a.nop()
+    a.move("a0", "t7"); a.jal("LOSE"); a.move("a1", "s0")
+    a.b("BS_stop"); a.nop()
+    a.label("BS_pause")
+    a.li("t1", 1); a.sb("t1", S_PAUSED, "t7")
+    a.label("BS_stop")
+    a.addiu("a0", "s0", C_BOOST); a.sb("zero", B_AUTO, "a0")
+    a.lwc1("f12", C_TIME, "s0")
+    a.jal(A["STOP"]); a.nop()
+    a.pop(0x10, RS); a.jr("ra"); a.nop()
+
+    # BTN (jal from 0x204E4C instead of FUN_001f2220): the pad controller's per-frame "boost held?" query.
+    # A forced "held" without the button becomes "not held" (so the game does not start / keep a boost), and a
+    # running boost is stopped at once. Returns the (corrected) answer.
+    RB = ["ra", "s0", "s1", "s2"]
     a.label("BTN")
     a.push(0x20, RB); a.move("s0", "a0")
     a.jal(A["HELD"]); a.nop()
     a.move("s1", "v0")
-    a.bnez("s1", "B_out"); a.nop()
-    a.lw("t9", P_CAR, "s0"); a.beqz("t9", "B_out"); a.nop()
-    a.addiu("t8", "t9", C_BOOST)
-    a.active("t9", "t8", "B_out")
+    a.beqz("s1", "B_chk"); a.nop()
+    a.label("B_chk")
+    a.lw("s2", P_CAR, "s0"); a.beqz("s2", "B_out"); a.nop()
+    a.addiu("t8", "s2", C_BOOST)
+    a.active("s2", "t8", "B_out")
     a.mem("lw", "t0", a.gaddr(T + 0x24), "t0"); a.andi("t0", "t0", FL_FREEBOOST); a.bnez("t0", "B_out"); a.nop()
-    a.lbu("t1", B_ACTIVE, "t8"); a.beqz("t1", "B_out"); a.nop()
-    a.stateptr("t9", "t7")
-    a.lbu("t1", S_SUPER, "t7"); a.beqz("t1", "B_stop"); a.nop()
-    a.lwc1("f0", S_GRACE, "t7"); a.mtc1("zero", "f1"); a.nop(); a.c_lt_s("f1", "f0"); a.bc1t("B_pause"); a.nop()
-    a.move("a0", "t7"); a.jal("LOSE"); a.move("a1", "t9")          # let go: supercharge and chain lost
-    a.b("B_stop"); a.nop()
-    a.label("B_pause")                                              # takedown grace: keep them (paused)
-    a.li("t1", 1); a.sb("t1", S_PAUSED, "t7")
-    a.label("B_stop")
-    a.lw("t9", P_CAR, "s0")
-    a.lwc1("f12", C_TIME, "t9")
-    a.jal(A["STOP"]); a.addiu("a0", "t9", C_BOOST)
+    a.move("a0", "s2"); a.jal("PADHELD"); a.nop()
+    a.bnez("v0", "B_out"); a.nop()
+    a.li("s1", 0)                                                   # forced "held" is not the button
+    a.lbu("t1", B_ACTIVE + C_BOOST, "s2"); a.beqz("t1", "B_out"); a.nop()
+    a.move("a0", "s2"); a.jal("BSTOP"); a.nop()
+    dbg = a.L("dbg")
+    a.mem("lw", "t0", a.gaddr(T + 0x24), "t0"); a.andi("t0", "t0", FL_DEBUG); a.beqz("t0", dbg); a.nop()
+    a.send_msg("s2", M_DBGPAD)
+    a.label(dbg)
     a.label("B_out")
     a.move("v0", "s1")
     a.pop(0x20, RB); a.jr("ra"); a.nop()
+
+    # ---------------------------------------------------------------- HUDFIRE (j from 0x1617B4, bar HUD FUN_00161070)
+    # The boost bar's fire overlay is drawn while boosting OR while the displayed bar is still rising (s3: a refill
+    # being animated - takedown refills, BURNOUT refills). For mod cars the fire follows the real boost only
+    # (option bit11 restores Revenge's fill fire). s0 = HUD element (car at +0x6CC); here the car is not boosting.
+    a.label("HUDFIRE")
+    a.beqz("s3", "HF_nofire"); a.nop()
+    a.lw("t9", H_CAR, "s0"); a.beqz("t9", "HF_fire"); a.nop()
+    a.addiu("t8", "t9", C_BOOST)
+    a.active("t9", "t8", "HF_fire")
+    a.mem("lw", "t0", a.gaddr(T + 0x24), "t0"); a.andi("t0", "t0", FL_FILLFIRE); a.bnez("t0", "HF_fire"); a.nop()
+    a.label("HF_nofire")                                           # original beql taken: its delay slot + target
+    a.lw("v1", 0x56C, "s0"); a.j(TR(0x161A44)); a.nop()
+    a.label("HF_fire")
+    a.j(TR(0x1617BC)); a.nop()
 
     a.label("RELEASE")
     a.lw("t9", B_CAR, "a0")
@@ -968,6 +1032,8 @@ def hooks(lay, labels):
         (0x16D358, 0x45000004, J(L["PROMPT"]), "j PROMPT (no PRESS R1 TO BOOST hint for mod cars)"),
         (0x204E98, JAL(A["STOPREQ"]), JAL(L["RELEASE"]), "jal RELEASE (boost button released, input path 2)"),
         (0x204E4C, JAL(A["HELD"]), JAL(L["BTN"]), "jal BTN (boost only while the button is held)"),
+        (0x1617B4, 0x526000A3, J(L["HUDFIRE"]), "j HUDFIRE (bar fire only while boosting; was beql s3,zero)"),
+        (0x1617B8, 0x8E03056C, 0x00000000, "nop (the beql delay slot, done in HUDFIRE)"),
         (0x15E3B8, 0x27BDF780, J(L["TINT"]), "j TINT (blue boost bar while supercharged)"),
         (0x15E3BC, 0x7FB00810, 0x27BDF780, "addiu sp,sp,-0x880 (moved into the delay slot)"),
         (0x15F09C, JAL(A["LABELFN"]), JAL(L["HUDLBL"]), "jal HUDLBL (chain label + arrows)"),

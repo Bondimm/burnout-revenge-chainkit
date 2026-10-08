@@ -142,7 +142,7 @@ def patch(data, tunables=None):
     # original words at every hook site (translated for the USA build): a wrong address can never be written
     for va, old, new, what in cave.hooks(lay, {k: 0 for k in ("ADD", "DRAIN", "EMPTY", "TICK", "TAKEDOWN", "CRASH",
                                                                "TINT", "HUDLBL", "SUB", "TRACK", "SHRINK", "RELEASE", "PROMPT",
-                                                               "BTN")}):
+                                                               "BTN", "HUDFIRE")}):
         if e.r32(va) != old:
             raise ChainError("unexpected code at %#x (%08x, expected %08x): unsupported or modified executable"
                              % (va, e.r32(va), old))
@@ -207,7 +207,7 @@ def read_tunables(data):
 
 
 # replaced second instructions of two-word hooks (no branch of the game may land on them), PAL addresses
-INNER = (0x2A3EEC, 0x2A3A9C, 0x15E3BC, 0x15DCF4, 0x15DD0C, 0x2A3F54, 0x2C890C, 0x16D35C)
+INNER = (0x2A3EEC, 0x2A3A9C, 0x15E3BC, 0x15DCF4, 0x15DD0C, 0x2A3F54, 0x2C890C, 0x16D35C, 0x1617B8)
 
 
 def check(data, log=print):

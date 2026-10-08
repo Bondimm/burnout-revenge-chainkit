@@ -146,12 +146,20 @@ def test_tunable_addresses_do_not_overlap():
 
 # ------------------------------------------------------------------------------------------- boost only while held
 CTRL = 0x5C000          # the human pad controller object (car at +0x2E80)
+PADPP, PADOBJ = 0x5D000, 0x5D100   # car + 0x37B0 -> PADPP -> PADOBJ (the pad)
 
 
-def pad(g, held):
-    """Run the pad controller's 'boost button held?' query (hook BTN) with the button held or not."""
-    g.cpu.m.w32(CTRL + cave.P_CAR, CAR)
-    g.cpu.stubs[A["HELD"]] = lambda cpu: cpu.g.__setitem__(2, 1 if held else 0)
+def set_pad(g, button, forced=False):
+    """The player's boost control (FUN_00111b80) and Revenge's "boost held" answer (button OR forced)."""
+    m = g.cpu.m
+    m.w32(CTRL + cave.P_CAR, CAR); m.w32(CAR + cave.C_PAD, PADPP); m.w32(PADPP, PADOBJ)
+    g.cpu.stubs[A["PADVAL"]] = lambda cpu: cpu.sf(0, 1.0 if button else 0.0)
+    g.cpu.stubs[A["HELD"]] = lambda cpu: cpu.g.__setitem__(2, 1 if (button or forced) else 0)
+
+
+def pad(g, held, forced=False):
+    """Run the pad controller's 'boost held?' query (hook BTN)."""
+    set_pad(g, held, forced)
     g.calls.clear()
     g.run("BTN", a0=CTRL)
     return g.cpu.gr(2)
@@ -163,11 +171,20 @@ def test_boost_stops_at_once_without_the_button():
     assert pad(g, held=False) == 0 and not g.is_boosting() and g.names()[-1] == "stop"
 
 
+def test_forced_held_without_the_button_is_refused():
+    """Revenge's answer can be "held" without the button (game flag controller+0x7224, Perfect-Start latch)."""
+    g = Game(); g.tick(); g.set_amt(300.0)
+    assert pad(g, held=False, forced=True) == 0 and "stop" not in g.names()          # not boosting: no start
+    g.boosting(True); g.cpu.m.write(BOOST + cave.B_AUTO, b"")
+    assert pad(g, held=False, forced=True) == 0 and not g.is_boosting()
+    assert g.cpu.m.read(BOOST + cave.B_AUTO, 1)[0] == 0                               # latch cleared
+
+
 def test_takedown_then_no_button_stops_boost_but_keeps_supercharge():
     g = supercharged(); g.boosting(True)
     g.run("TAKEDOWN", a0=BOOST)                          # supercharged takedown: all arrows, grace starts
     assert g.super() == 1 and g.arrows() == 200.0
-    pad(g, held=False)                                   # the game keeps boosting, the player does not hold
+    pad(g, held=False)
     assert not g.is_boosting() and "stop" in g.names()
     assert g.super() == 1 and g.cpu.m.read(g.st(cave.S_PAUSED), 1)[0] == 1     # grace: supercharge kept
     assert cave.M_LOST not in g.msgs()
@@ -188,23 +205,75 @@ def test_letting_go_after_the_grace_loses_the_supercharge():
     assert not g.is_boosting() and g.super() == 0 and cave.M_LOST in g.msgs()
 
 
-def test_perfect_start_latch_boost_stops_without_the_button():
-    g = Game(); g.tick(); g.set_amt(300.0); g.boosting(True)
-    g.cpu.m.write(BOOST + cave.B_AUTO, b"\1")            # Revenge ignores stop requests while this is set
-    pad(g, held=False)
+def test_every_frame_check_stops_boosts_the_pad_controller_never_sees():
+    """Takedown camera / autopilot: the pad controller is not asked; the car tick checks the button itself."""
+    g = supercharged(); g.boosting(True); g.run("TAKEDOWN", a0=BOOST)
+    set_pad(g, button=True)
+    for _ in range(5):
+        g.tick()
+    assert g.is_boosting()                               # button held: keeps boosting
+    set_pad(g, button=False)
+    g.calls.clear(); g.tick()
+    assert not g.is_boosting() and "stop" in g.names() and g.super() == 1     # grace: supercharge kept, boost ends
+    g.boosting(True); g.calls.clear(); g.tick()          # the game starts it again: stopped again
     assert not g.is_boosting()
+
+
+def test_car_without_pad_is_never_stopped():
+    g = Game(); g.tick(); g.boosting(True)
+    g.calls.clear(); g.tick()                             # no pad pointer: treat as held
+    assert g.is_boosting() and "stop" not in g.names()
+
+
+def test_debug_popups_name_the_path():
+    g = Game(flags=TUNE["flags"] | cave.FL_DEBUG); g.tick(); g.boosting(True)
+    pad(g, held=False)
+    assert g.msgs() == [cave.M_DBGPAD]
+    g.boosting(True); set_pad(g, button=False); g.calls.clear(); g.tick()
+    assert g.msgs() == [cave.M_DBGAUTO]
+    g2 = Game(); g2.tick(); g2.boosting(True); pad(g2, held=False)
+    assert g2.msgs() == []                                # off by default
 
 
 def test_free_boost_option_and_vanilla_cases_untouched():
     g = Game(flags=TUNE["flags"] | cave.FL_FREEBOOST); g.tick(); g.boosting(True)
-    pad(g, held=False)
-    assert g.is_boosting() and "stop" not in g.names()               # option off: Revenge decides
+    assert pad(g, held=False, forced=True) == 1                       # option off: Revenge's answer
+    assert g.is_boosting() and "stop" not in g.names()
+    g.tick(); assert g.is_boosting()
     for game in (Game(ctrl=1), _crash_game()):
         game.tick(); game.boosting(True)
         pad(game, held=False)
-        assert game.is_boosting() and "stop" not in game.names()     # AI / Crash mode: vanilla
+        game.tick()
+        assert game.is_boosting() and "stop" not in game.names()      # AI / Crash mode: vanilla
 
 
 def _crash_game():
-    g = Game(); g.cpu.m.write(A["CRASHFLAG"], b"\1")
+    g = Game(); g.cpu.m.write(A["CRASHFLAG"], b"")
     return g
+
+
+# ------------------------------------------------------------------------------------------- bar fire follows the boost
+def bar_fire(g, filling):
+    """Run HUDFIRE for the boost-bar HUD element (not boosting); returns 'fire' or 'nofire'."""
+    hud = 0x5E000
+    g.cpu.m.w32(hud + cave.H_CAR, CAR); g.cpu.m.w32(hud + 0x56C, 0x5E800)
+    seen = []
+    g.cpu.stubs[T(0x161A44)] = lambda cpu: seen.append(("nofire", cpu.gr(3)))
+    g.cpu.stubs[T(0x1617BC)] = lambda cpu: seen.append(("fire", None))
+    g.run("HUDFIRE", s0=hud, s3=1 if filling else 0)
+    return seen[0]
+
+
+def test_bar_fire_only_while_boosting_for_mod_cars():
+    g = supercharged()
+    assert bar_fire(g, filling=True) == ("nofire", 0x5E800)        # refill animation: no fire for mod cars
+    assert bar_fire(g, filling=False) == ("nofire", 0x5E800)
+
+
+def test_bar_fire_while_filling_option_and_vanilla_cases():
+    g = Game(flags=TUNE["flags"] | cave.FL_FILLFIRE); g.tick()
+    assert bar_fire(g, filling=True)[0] == "fire"
+    for game in (Game(ctrl=1), _crash_game()):
+        game.tick()
+        assert bar_fire(game, filling=True)[0] == "fire"            # AI / Crash mode: Revenge's own HUD
+        assert bar_fire(game, filling=False)[0] == "nofire"

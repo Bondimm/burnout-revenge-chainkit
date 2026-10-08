@@ -17,7 +17,8 @@ DEFAULTS = {n: d for n, off, t, d, h in cave.TUNABLES}
 HELP = {n: h for n, off, t, d, h in cave.TUNABLES}
 FLAGS = dict(popups=cave.FL_MSG, arrows=cave.FL_ARROWS, tint=cave.FL_TINT, sounds=cave.FL_SOUND, slow_rule=cave.FL_SLOW,
              no_earn_while_boosting=cave.FL_NOEARN, full_bar=cave.FL_FULLBAR, show_size_label=cave.FL_SHOWLABEL,
-             show_boost_hint=cave.FL_SHOWHINT, boost_without_button=cave.FL_FREEBOOST)
+             show_boost_hint=cave.FL_SHOWHINT, boost_without_button=cave.FL_FREEBOOST, debug_boost=cave.FL_DEBUG,
+             fill_fire=cave.FL_FILLFIRE)
 MODES = {key: 1 << bit for bit, key, _ in cave.MODES if key != "online"}
 ALL_MODES = sum(MODES.values())
 ALL_FLAGS = sum(FLAGS.values())
@@ -183,6 +184,12 @@ GROUPS = [
         flag("show_boost_hint", "Show the PRESS R1 TO BOOST hint", "Revenge shows it when you have boost and "
              "do not use it for 5 seconds. Hidden by default: with this mod you often wait for the supercharge "
              "on purpose."),
+        flag("fill_fire", "Bar fire while the bar fills up",
+             "Revenge also draws the fire on the boost bar while a refill is being animated (after a takedown or "
+             "a BURNOUT), even when you are not boosting. Off: the fire shows only while you really boost."),
+        flag("debug_boost", "Debug: show stopped boosts",
+             "For testing: a pop-up BOOST STOP: PAD / BOOST STOP: AUTO each time a boost without the button is "
+             "stopped (PAD = while you drive, AUTO = while the game drives, e.g. takedown camera)."),
         Item("lit_rgba", "Lit arrow colour", "Colour of a lit arrow (Dominator: cyan)."),
         Item("dark_rgba", "Unlit arrow colour", "Colour of an unlit arrow."),
         Item("shadow_rgba", "Arrow outline", "Dark outline drawn behind every arrow."),
