@@ -1,0 +1,33 @@
+{
+ "iso": "Burnout Revenge (Europe) (En,Fr,De).iso",
+ "dominator": "Burnout Dominator (Europe).iso",
+ "out": "Burnout Revenge (Europe) (En,Fr,De) (Burnout Chain).iso",
+ "dominator_ok": true,
+ "disc": {
+  "path": "Burnout Revenge (Europe) (En,Fr,De).iso",
+  "summary": "Burnout Revenge PAL",
+  "applied": false,
+  "values": null,
+  "problems": [],
+  "arrow_art": null,
+  "musickit": false,
+  "carkit": false,
+  "songs": 41,
+  "crc": 2122566747,
+  "langs": [
+   "UK",
+   "FR",
+   "GE"
+  ]
+ },
+ "open_groups": [
+  "Game modes",
+  "Supercharge and Burnout rules"
+ ],
+ "log": [
+  "--- open ISO",
+  "Burnout Revenge (Europe) (En,Fr,De).iso: Burnout Revenge PAL",
+  "--- check Dominator ISO",
+  "Burnout Dominator ISO: arrow art found"
+ ]
+}

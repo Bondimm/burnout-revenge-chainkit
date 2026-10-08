@@ -1,0 +1,75 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / Python ${{ matrix.python }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # macos-latest = Apple Silicon (arm64), macos-15-intel = Intel (x86_64)
+        os: [windows-latest, macos-latest, macos-15-intel]
+        python: ["3.11", "3.13"]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Run setup.bat (the Windows installer)
+        if: runner.os == 'Windows'
+        shell: cmd
+        env:
+          CHAINKIT_NO_PAUSE: "1"
+        run: |
+          call setup.bat || exit /b 1
+          .venv\Scripts\python.exe --version
+          call chainkit-cli.bat presets || exit /b 1
+
+      - name: Run setup.command (the macOS installer)
+        if: runner.os == 'macOS'
+        env:
+          CHAINKIT_NO_PAUSE: "1"
+        run: ./setup.command
+
+      - name: Check the macOS launchers
+        if: runner.os == 'macOS'
+        run: |
+          test -x setup.command && test -x ChainKit.command && test -x chainkit-cli.sh
+          .venv/bin/python --version
+          ./chainkit-cli.sh --help > /dev/null
+          ./chainkit-cli.sh presets
+          CHAINKIT_NO_PAUSE=1 ./setup.command   # a second run only checks (idempotent)
+
+      - name: Tests (disc tests skip without an ISO)
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then PY=.venv/Scripts/python.exe; else PY=.venv/bin/python; fi
+          "$PY" -m pip install capstone   # optional: encoder round trip test
+          "$PY" -m pytest -v -rs tests
+
+      - name: GUI screenshot (needs an OpenGL context on the runner)
+        continue-on-error: true
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then PY=.venv/Scripts/python.exe; else PY=.venv/bin/python; fi
+          "$PY" -m chainkit gui --shot gui.png && ls -l gui.png
+
+      - name: Upload the GUI screenshot
+        if: hashFiles('gui.png') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: gui-${{ matrix.os }}-py${{ matrix.python }}
+          path: gui.png
+          retention-days: 7

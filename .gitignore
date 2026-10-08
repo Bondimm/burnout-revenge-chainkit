@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.DS_Store
+# never commit disc images or game files
+*.iso
+*.ISO
+*.bin
+*.BIN
+*.elf
+*.ELF
+*.txd
+*.TXD
+SLES_*
+SLUS_*
+docs/screenshots/.home/

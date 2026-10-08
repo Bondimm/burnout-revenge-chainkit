@@ -1,0 +1,53 @@
+{
+ "iso": "Burnout Revenge (Europe) (En,Fr,De).iso",
+ "dominator": "Burnout Dominator (Europe).iso",
+ "out": "Burnout Revenge (Europe) (En,Fr,De) (Burnout Chain).iso",
+ "dominator_ok": true,
+ "disc": {
+  "path": "Burnout Revenge (Europe) (En,Fr,De).iso",
+  "summary": "Burnout Revenge PAL",
+  "applied": false,
+  "values": null,
+  "problems": [],
+  "arrow_art": null,
+  "musickit": false,
+  "carkit": false,
+  "songs": 41,
+  "crc": 2122566747,
+  "langs": [
+   "UK",
+   "FR",
+   "GE"
+  ]
+ },
+ "open_groups": [
+  "Normal bar fill (before the supercharge)"
+ ],
+ "log": [
+  "--- open ISO",
+  "Burnout Revenge (Europe) (En,Fr,De).iso: Burnout Revenge PAL",
+  "--- check Dominator ISO",
+  "Burnout Dominator ISO: arrow art found",
+  "--- save new ISO",
+  "source: Burnout Revenge (Europe) (En,Fr,De).iso (Burnout Revenge PAL)",
+  "arrow texture: Burnout Dominator's Boost_Arrow",
+  "executable: 33 hooks, code 0x4a5000-0x4a69ac, PCSX2 CRC 7E83CC5B kept",
+  "HUD texts: UK, FR, GE",
+  "saved Burnout Revenge (Europe) (En,Fr,De) (Burnout Chain).iso",
+  "checking the new ISO (compares every file with your ISO) ...",
+  "executable: OK",
+  "PCSX2 game CRC: 7E83CC5B -> 7E83CC5B (unchanged)",
+  "texts UK: OK",
+  "texts FR: OK",
+  "texts GE: OK",
+  "arrow texture: Burnout Dominator's Boost_Arrow",
+  "untouched files identical: 844 (0 differ)",
+  "settings: Default (tested)",
+  "RESULT: OK",
+  "Done. Play Burnout Revenge (Europe) (En,Fr,De) (Burnout Chain).iso in PCSX2 or on your PS2. Open it here again to change its settings later."
+ ],
+ "last_save": {
+  "out": "Burnout Revenge (Europe) (En,Fr,De) (Burnout Chain).iso",
+  "ok": true
+ }
+}
