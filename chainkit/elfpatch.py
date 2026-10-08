@@ -210,6 +210,43 @@ def read_tunables(data):
 INNER = (0x2A3EEC, 0x2A3A9C, 0x15E3BC, 0x15DCF4, 0x15DD0C, 0x2A3F54, 0x2C890C, 0x16D35C, 0x1617B8)
 
 
+def message_table(e, lay):
+    """[(id, display flags, name)] of the HUD message table the patched game really uses (read back from the
+    relocated lui/addiu pair and loop count of FUN_0016fcf0)."""
+    hi, lo = e.r32(lay.t(0x16FCFC)) & 0xFFFF, e.r32(lay.t(0x16FD0C)) & 0xFFFF
+    table = ((hi << 16) + (lo - 0x10000 if lo & 0x8000 else lo)) & 0xFFFFFFFF
+    count = (e.r32(lay.t(0x16FD24)) & 0xFFFF) + 1
+    out = []
+    for k in range(count):
+        w0, name_ptr, _ = struct.unpack_from("<3I", e.d, e.file_offset(table + 12 * k))
+        try:
+            o = e.file_offset(name_ptr)
+            name = bytes(e.d[o:o + 40]).split(b"\0")[0].decode("latin-1")
+        except KeyError:
+            name = None
+        out.append((w0 & 0xFF, (w0 >> 8) & 0xFF, name))
+    return out
+
+
+def message_problems(e, lay):
+    """Every new HUD message must exist exactly once in the table the game uses, under its own name, with an id
+    the game does not refuse (an id the original table already has would show the game's message instead)."""
+    bad = []
+    tab = message_table(e, lay)
+    ids = [i for i, _, _ in tab]
+    for name, mid, flags, lvl in cave.NEW_MESSAGES:
+        hits = [t for t in tab if t[0] == mid]
+        if len(hits) != 1:
+            bad.append("message id %#x used %d times in the table (%s)" % (mid, len(hits), name))
+        elif hits[0][2] != name or hits[0][1] != flags:
+            bad.append("message id %#x is %r, not %s" % (mid, hits[0][2], name))
+        if mid in cave.REFUSED_MSG_IDS:
+            bad.append("message id %#x is refused by the game" % mid)
+    if len(set(ids)) != len(ids):
+        bad.append("duplicate message ids in the table")
+    return bad
+
+
 def check(data, log=print):
     """Static checks of a patched executable. Returns a list of problems (empty = OK)."""
     bad = []
@@ -225,6 +262,7 @@ def check(data, log=print):
     o = e.file_offset(lay.code)
     if bytes(e.d[o:o + len(code)]) != code:
         bad.append("cave code differs from this ChainKit version")
+    bad += message_problems(e, lay)
     hk = cave.hooks(lay, labels)
     for va, old, new, what in hk:
         if e.r32(va) != new:

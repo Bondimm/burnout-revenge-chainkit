@@ -70,7 +70,7 @@ NAMES = 0xEF0            # message names (ASCII; after the mode table)
 SCORN = 0x3C0            # shadow quad corners (32 bytes)
 MSGTAB = 0x400           # relocated + extended message table
 MAGIC = b"CHAINKIT"
-VERSION = 6              # 6: autopilot boost start refused; 3: per-mode switches, per-action fill factors, label/hint switches; 4: BTN hook;
+VERSION = 7              # 7: debug message ids moved to free ids; 6: autopilot boost start refused; 3: per-mode switches, per-action fill factors, label/hint switches; 4: BTN hook;
                          # 5: button read from the pad, checked every frame
 
 # (name, offset in G_TUNE block, type, default, help)
@@ -169,11 +169,16 @@ G_DESIGN = 0xE0  # w,h,x0,dx,y,aw,ah,n (32 bytes, 0xE0..0x100)
 NEW_MESSAGES = [("BlueBoostAvailable", 0x74, 0x03, 0x02), ("Burnout", 0x75, 0x02, 0x03),
                 ("BurnoutLost", 0x76, 0x03, 0xFF), ("BurnoutDomination", 0x77, 0x02, 0x04),
                 ("BurnoutWow", 0x78, 0x02, 0x04),
-                ("DebugBoostPad", 0x79, 0x03, 0x02), ("DebugBoostAuto", 0x7A, 0x03, 0x02),
-                ("DebugBoostTap", 0x7B, 0x03, 0x02), ("DebugBoostBlock", 0x7C, 0x03, 0x02)]
+                ("DebugBoostPad", 0x79, 0x03, 0x02), ("DebugBoostAuto", 0xA7, 0x03, 0x02),
+                ("DebugBoostTap", 0xA8, 0x03, 0x02), ("DebugBoostBlock", 0xA9, 0x03, 0x02)]
+# Ids must be free in the game's own table (0x7A..0x7F, 0x7B ... are taken: v15's debug ids collided) and must not be
+# one the game refuses to queue (FUN_0016d5f8: 1-6, 0x66-0x6A, 0xB7, 0xBD-0xC0, 0xC5-0xC7, 0xE3-0xEB).
+FREE_MSG_IDS = (0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0xA7, 0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF)
+REFUSED_MSG_IDS = (set(range(1, 7)) | set(range(0x66, 0x6B)) | {0xB7} | set(range(0xBD, 0xC1))
+                   | set(range(0xC5, 0xC8)) | set(range(0xE3, 0xEC)))
 HUD_SEGS = 0x6DE         # boost-bar HUD element + 0x6FE (displayed segments), relative to the draw context (+0x20)
-M_SUPER, M_BURNOUT, M_LOST, M_DOMI, M_WOW, M_DBGPAD, M_DBGAUTO = 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A
-M_DBGTAP, M_DBGBLOCK = 0x7B, 0x7C
+M_SUPER, M_BURNOUT, M_LOST, M_DOMI, M_WOW, M_DBGPAD, M_DBGAUTO = 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0xA7
+M_DBGTAP, M_DBGBLOCK = 0xA8, 0xA9
 
 
 class Layout:

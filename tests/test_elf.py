@@ -80,3 +80,25 @@ def test_hooks_hit_the_expected_original_code(elf):
         # every mode vtable points into the code segment (sanity check of the mode table)
         fn = struct.unpack_from("<I", e.d, e.file_offset(vt) + 12)[0]       # first virtual function
         assert 0x100000 <= fn < 0x400000, hex(vt)
+
+
+def test_built_executable_runs_the_tested_code_and_messages(elf, monkeypatch):
+    """The bytes in the built executable are exactly what the interpreter tests run, and every new HUD message is
+    found under its own free id in the table the game uses (v15 debug ids collided with Takedown messages)."""
+    lay = elfpatch.layout(elf)
+    v = dict(settings.DEFAULTS, flags=settings.DEFAULTS["flags"] | cave.FL_DEBUG)
+    out, _ = elfpatch.patch(elf, v)
+    e = Elf(out)
+    code, _ = cave.build_code(lay)
+    old_table = bytes(Elf(elf).d[Elf(elf).file_offset(lay.a["MSGTAB_OLD"]):][:12 * lay.a["MSG_COUNT"]])
+    data = cave.build_data(lay, old_table, v)
+    o = e.file_offset(lay.a["REGION"])
+    assert bytes(e.d[o:o + len(data)]) == data and bytes(e.d[o + len(data):o + len(data) + len(code)]) == code
+    assert elfpatch.message_problems(e, lay) == []
+    tab = elfpatch.message_table(e, lay)
+    assert len(tab) == lay.msg_count
+    # a colliding id is caught
+    monkeypatch.setattr(cave, "NEW_MESSAGES", cave.NEW_MESSAGES[:-1] + [("DebugBoostBlock", 0x7C, 0x03, 0x02)])
+    lay2 = elfpatch.layout(elf)
+    bad, _ = elfpatch.patch(elf, v)
+    assert elfpatch.message_problems(Elf(bad), lay2)

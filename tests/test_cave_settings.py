@@ -317,3 +317,17 @@ def test_bar_fire_while_filling_option_and_vanilla_cases():
         game.tick()
         assert bar_fire(game, filling=True)[0] == "fire"            # AI / Crash mode: Revenge's own HUD
         assert bar_fire(game, filling=False)[0] == "nofire"
+
+
+# ------------------------------------------------------------------------------------------- message ids
+def test_new_message_ids_are_free_and_accepted():
+    ids = [mid for _, mid, _, _ in cave.NEW_MESSAGES]
+    assert len(set(ids)) == len(ids)
+    for mid in ids:
+        assert mid in cave.FREE_MSG_IDS and mid not in cave.REFUSED_MSG_IDS, hex(mid)
+    sent = {cave.M_SUPER, cave.M_BURNOUT, cave.M_LOST, cave.M_DOMI, cave.M_WOW, cave.M_DBGPAD, cave.M_DBGAUTO,
+            cave.M_DBGTAP, cave.M_DBGBLOCK}
+    assert sent == set(ids)
+    from chainkit import assets
+    for name, *_ in cave.NEW_MESSAGES:
+        assert "BigMessage%sPart1" % name in assets.TEXTS, name
