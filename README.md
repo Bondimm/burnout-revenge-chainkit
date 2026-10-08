@@ -68,8 +68,13 @@ verified. The log shows the result (*RESULT: OK*). Load the new `.iso` in PCSX2 
 
 ![Saved and checked](docs/images/chainkit_saved.png)
 
-*In-game screenshots: coming soon.*
-<!-- TODO: docs/images/ingame_supercharge.png, ingame_burnout_chain.png (PCSX2) -->
+### In the game
+Supercharge-boosting with the arrows lighting up over the bar. Every full refill is a **BURNOUT**, and the chain
+counts up in the pop-up (Burnout Revenge USA in PCSX2):
+
+![BURNOUT! x2 - arrows lighting up over the boost bar](docs/images/ingame_burnout_x2.png)
+
+![BURNOUT! x4 - the chain continues](docs/images/ingame_burnout_x4.png)
 
 ### Change the settings later
 Select an image ChainKit made in step 1: its settings appear on the right. Change them and save another **new**
