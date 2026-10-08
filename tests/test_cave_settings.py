@@ -175,19 +175,59 @@ def test_forced_held_without_the_button_is_refused():
     """Revenge's answer can be "held" without the button (game flag controller+0x7224, Perfect-Start latch)."""
     g = Game(); g.tick(); g.set_amt(300.0)
     assert pad(g, held=False, forced=True) == 0 and "stop" not in g.names()          # not boosting: no start
-    g.boosting(True); g.cpu.m.write(BOOST + cave.B_AUTO, b"")
+    g.boosting(True); g.cpu.m.write(BOOST + cave.B_AUTO, b"\1")
     assert pad(g, held=False, forced=True) == 0 and not g.is_boosting()
     assert g.cpu.m.read(BOOST + cave.B_AUTO, 1)[0] == 0                               # latch cleared
 
 
-def test_takedown_then_no_button_stops_boost_but_keeps_supercharge():
-    g = supercharged(); g.boosting(True)
-    g.run("TAKEDOWN", a0=BOOST)                          # supercharged takedown: all arrows, grace starts
+def game_drives(g, on):
+    """Takedown camera / autopilot: the game drives the player's car (car +0x3B28)."""
+    g.cpu.m.write(CAR + cave.C_AUTO, b"\1" if on else b"\0")
+
+
+def later(g, seconds):
+    for _ in range(int(seconds * 60)):
+        g.cpu.m.wf32(CAR + cave.C_TIME, g.f(CAR + cave.C_TIME) + 1 / 60)
+        g.tick()
+
+
+def test_release_after_a_takedown_with_control_is_a_release():
+    """R1 let go while the player drives (the takedown refill made the bar full): supercharge + chain lost."""
+    g = supercharged(); g.boosting(True); g.cpu.m.w32(g.st(cave.S_CHAIN), 2)
+    g.run("TAKEDOWN", a0=BOOST)                          # supercharged takedown: all arrows, Revenge refills
     assert g.super() == 1 and g.arrows() == 200.0
     pad(g, held=False)
-    assert not g.is_boosting() and "stop" in g.names()
-    assert g.super() == 1 and g.cpu.m.read(g.st(cave.S_PAUSED), 1)[0] == 1     # grace: supercharge kept
-    assert cave.M_LOST not in g.msgs()
+    assert not g.is_boosting() and g.super() == 0 and cave.M_LOST in g.msgs()
+
+
+def test_release_during_the_camera_still_released_at_control_return_is_lost():
+    g = supercharged(); g.boosting(True); g.cpu.m.w32(g.st(cave.S_CHAIN), 2); g.run("TAKEDOWN", a0=BOOST)
+    game_drives(g, True); set_pad(g, button=False)
+    later(g, 1.0)                                        # camera: the game stops the boost, supercharge kept
+    assert not g.is_boosting() and g.super() == 1
+    game_drives(g, False)                                # control back, button still up
+    later(g, 0.2)
+    assert g.super() == 1                                # REGRAB window
+    later(g, 0.2)
+    assert g.super() == 0 and cave.M_LOST in g.msgs()
+
+
+def test_release_during_the_camera_but_pressed_at_control_return_continues():
+    g = supercharged(); g.boosting(True); g.run("TAKEDOWN", a0=BOOST)
+    game_drives(g, True); set_pad(g, button=False)
+    later(g, 1.0)
+    game_drives(g, False)
+    later(g, 0.1)
+    set_pad(g, button=True); g.boosting(True)            # pressed again: the pad controller restarts the boost
+    later(g, 1.0)
+    assert g.super() == 1 and g.is_boosting() and cave.M_LOST not in g.msgs()
+
+
+def test_paused_supercharge_kept_while_held_after_the_window():
+    g = supercharged(); g.cpu.m.write(g.st(cave.S_PAUSED), b"\1")
+    set_pad(g, button=True)
+    later(g, 1.0)                                        # waiting for the game to restart the boost
+    assert g.super() == 1
 
 
 def test_takedown_then_button_held_keeps_boosting():
@@ -208,13 +248,14 @@ def test_letting_go_after_the_grace_loses_the_supercharge():
 def test_every_frame_check_stops_boosts_the_pad_controller_never_sees():
     """Takedown camera / autopilot: the pad controller is not asked; the car tick checks the button itself."""
     g = supercharged(); g.boosting(True); g.run("TAKEDOWN", a0=BOOST)
+    game_drives(g, True)
     set_pad(g, button=True)
     for _ in range(5):
         g.tick()
     assert g.is_boosting()                               # button held: keeps boosting
     set_pad(g, button=False)
     g.calls.clear(); g.tick()
-    assert not g.is_boosting() and "stop" in g.names() and g.super() == 1     # grace: supercharge kept, boost ends
+    assert not g.is_boosting() and "stop" in g.names() and g.super() == 1     # game drives: supercharge kept
     g.boosting(True); g.calls.clear(); g.tick()          # the game starts it again: stopped again
     assert not g.is_boosting()
 
@@ -288,7 +329,7 @@ def test_free_boost_option_and_vanilla_cases_untouched():
 
 
 def _crash_game():
-    g = Game(); g.cpu.m.write(A["CRASHFLAG"], b"")
+    g = Game(); g.cpu.m.write(A["CRASHFLAG"], b"\1")
     return g
 
 

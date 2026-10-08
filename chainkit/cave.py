@@ -70,7 +70,7 @@ NAMES = 0xEF0            # message names (ASCII; after the mode table)
 SCORN = 0x3C0            # shadow quad corners (32 bytes)
 MSGTAB = 0x400           # relocated + extended message table
 MAGIC = b"CHAINKIT"
-VERSION = 7              # 7: debug message ids moved to free ids; 6: autopilot boost start refused; 3: per-mode switches, per-action fill factors, label/hint switches; 4: BTN hook;
+VERSION = 8              # 8: release = no button while the player drives; 7: debug message ids moved to free ids; 6: autopilot boost start refused; 3: per-mode switches, per-action fill factors, label/hint switches; 4: BTN hook;
                          # 5: button read from the pad, checked every frame
 
 # (name, offset in G_TUNE block, type, default, help)
@@ -156,6 +156,9 @@ H_CAR = 0x6CC            # boost-bar HUD element -> its car
 C_PAD = 0x37B0           # car -> pointer to its pad object pointer (human cars)
 BYPAD = 0xF80            # region: 8 bytes, 1 = the running boost has been backed by the button (tap vs game boost)
 BLKT = 0xFA0             # region: 8 floats, race time of the last BOOST BLOCKED debug pop-up
+CTRLT = 0xFC0            # region: 8 floats, race time of the last frame the GAME drove the car (camera / autopilot)
+C_INPUT, C_AUTO = 0x2CA9, 0x3B28    # car: 0 = the pad is not read at all; != 0 = autopilot (game drives)
+REGRAB = 0.3             # s after the game gives control back in which pressing boost again keeps the supercharge
 P_CAR = 0x2E80           # pad controller (FUN_00204ac8's object) -> its car
 # design units of the boost bar sprite (FUN_0015daa0: 290 x 28) and the arrow row
 DESIGN = dict(w=290.0, h=28.0, x0=26.0, dx=15.9, y=14.0, aw=13.0, ah=16.0, n=16.0)
@@ -190,7 +193,7 @@ class Layout:
         self.names, self.msgtab, self.code = R + NAMES, R + MSGTAB, a["CODE"]
         self.msg_count = a["MSG_COUNT"] + len(NEW_MESSAGES)
         assert self.msgtab + 12 * self.msg_count <= R + AWARD_TABLE      # (no overlap with the tables after it)
-        assert BLKT + 32 <= self.code - R
+        assert CTRLT + 32 <= self.code - R
         self.burnout_entry = self.msgtab + 12 * (a["MSG_COUNT"] + 1)   # NEW_MESSAGES[1]
 
     def t(self, pal_addr):
@@ -301,6 +304,23 @@ class CaveAsm(Asm):
         """out = address of the car's 'boost backed by the button' byte (uses t0)."""
         self.lw(out, C_IDX, car); self.andi(out, out, 7)
         self.la("t0", self.A["REGION"] + BYPAD); self.addu(out, out, "t0")
+
+    def game_driving(self, car, out):
+        """out = 1 while the game, not the player, controls the car (takedown camera / autopilot). Uses t0."""
+        self.lbu(out, C_INPUT, car); self.sltiu(out, out, 1)
+        self.lbu("t0", C_AUTO, car); self.sltu("t0", "zero", "t0"); self.or_(out, out, "t0")
+
+    def regrab_window(self, car, out):
+        """out = 1 within REGRAB s after the game gave control back. Uses t0, f0-f2."""
+        no = self.L("rw")
+        self.lw("t0", C_IDX, car); self.andi("t0", "t0", 7); self.sll("t0", "t0", 2)
+        self.la(out, self.A["REGION"] + CTRLT); self.addu("t0", "t0", out)
+        self.li(out, 0)
+        self.lwc1("f0", C_TIME, car); self.lwc1("f1", 0, "t0"); self.sub_s("f0", "f0", "f1")
+        self.mtc1("zero", "f2"); self.nop(); self.c_lt_s("f0", "f2"); self.bc1t(no); self.nop()   # clock went back
+        self.lif("f2", REGRAB, tmp="t0"); self.c_lt_s("f0", "f2"); self.bc1f(no); self.nop()
+        self.li(out, 1)
+        self.label(no)
 
     def debug_msg(self, car, mid):
         skip = self.L("nodbg")
@@ -635,6 +655,12 @@ def build_code(lay):
     a.label("T_noreset")
     # boost only while the button is held - also while the pad controller is not asked (takedown camera,
     # autopilot): any boost the player's boost control does not back is stopped every frame
+    # remember the last frame the game drove the car (for the REGRAB window after it gives control back)
+    a.game_driving("s1", "t1"); a.beqz("t1", "T_ownctl"); a.nop()
+    a.lw("t1", C_IDX, "s1"); a.andi("t1", "t1", 7); a.sll("t1", "t1", 2)
+    a.la("t2", A["REGION"] + CTRLT); a.addu("t2", "t2", "t1")
+    a.lwc1("f0", C_TIME, "s1"); a.swc1("f0", 0, "t2")
+    a.label("T_ownctl")
     # (debug pop-ups: TAP END = the button was let go, AUTO = a boost the button never backed)
     a.mem("lw", "t0", a.gaddr(T + 0x24), "t0"); a.andi("t0", "t0", FL_FREEBOOST); a.bnez("t0", "T_btnok"); a.nop()
     a.lbu("t1", B_ACTIVE, "s0"); a.bnez("t1", "T_bact"); a.nop()
@@ -702,7 +728,18 @@ def build_code(lay):
     a.label("T_idle")
     # supercharged and idle: anything that took boost away (slam, crash) ends the supercharge
     a.sw("zero", S_SLOW, "s2")
-    a.lbu("t1", S_PAUSED, "s2"); a.bnez("t1", "T_done"); a.nop()
+    a.lbu("t1", S_PAUSED, "s2"); a.beqz("t1", "T_nopause"); a.nop()
+    # paused (the game stopped the boost: takedown camera ...). With "only boost while held" it lasts while the game
+    # drives, then REGRAB s; after that the button must be down (the pad controller restarts the boost), else it
+    # was a release: supercharge + chain lost. (Option off: Revenge's own timing - the pause holds.)
+    a.mem("lw", "t0", a.gaddr(T + 0x24), "t0"); a.andi("t0", "t0", FL_FREEBOOST); a.bnez("t0", "T_done"); a.nop()
+    a.game_driving("s1", "t1"); a.bnez("t1", "T_done"); a.nop()
+    a.regrab_window("s1", "t1"); a.bnez("t1", "T_done"); a.nop()
+    a.move("a0", "s1"); a.jal("PADHELD"); a.nop()
+    a.bnez("v0", "T_done"); a.nop()
+    a.move("a0", "s2"); a.jal("LOSE"); a.move("a1", "s1")
+    a.b("T_done"); a.nop()
+    a.label("T_nopause")
     a.lwc1("f0", S_GRACE, "s2"); a.mtc1("zero", "f1"); a.nop(); a.c_lt_s("f1", "f0"); a.bc1t("T_done"); a.nop()
     a.lwc1("f0", B_AMT, "s0"); a.lwc1("f1", B_MAX, "s0")
     a.mem("lwc1", "f3", lay.a["REGION"] + 0x2C0, "t1"); a.mul_s("f1", "f1", "f3")
@@ -826,7 +863,10 @@ def build_code(lay):
     a.push(0x10, RS); a.move("s0", "a0")
     a.stateptr("s0", "t7")
     a.lbu("t1", S_SUPER, "t7"); a.beqz("t1", "BS_stop"); a.nop()
-    a.lwc1("f0", S_GRACE, "t7"); a.mtc1("zero", "f1"); a.nop(); a.c_lt_s("f1", "f0"); a.bc1t("BS_pause"); a.nop()
+    # The player let go - a real release (supercharge + chain lost) unless the game is driving the car (takedown
+    # camera / autopilot) or has just given control back (REGRAB s to press boost again): then it is a pause.
+    a.game_driving("s0", "t1"); a.bnez("t1", "BS_pause"); a.nop()
+    a.regrab_window("s0", "t1"); a.bnez("t1", "BS_pause"); a.nop()
     a.move("a0", "t7"); a.jal("LOSE"); a.move("a1", "s0")
     a.b("BS_stop"); a.nop()
     a.label("BS_pause")

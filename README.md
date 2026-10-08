@@ -35,7 +35,7 @@ set built in — and lets you tune every part of it.
 | **Arrows** | While you boost on a supercharged bar it drains 3× faster, and 16 **arrows** over the bar light up from everything in the skill list (near miss, oncoming, drift, air, checked traffic, tailgating, grinding, rubbing). A takedown lights all of them. |
 | **BURNOUT!** | When the supercharged bar runs empty it refills to half plus the lit arrows. All arrows lit = a full refill = a **BURNOUT**: the chain goes up (*BURNOUT! x2*, *x3* …, *BURNOUT DOMINATION!* at x10) and you keep boosting. |
 | **Partial refill** | Not all arrows lit: the bar refills to at most 80 % and the supercharge is lost (*SUPERCHARGE LOST*). |
-| **Losing it** | Letting go of the boost button, wrecking, a hit while you are not boosting, or boosting below 97 km/h (60 mph) for 3 seconds ends the supercharge and the chain. While you supercharge-boost, a hit never takes the bar below half, and the takedown camera does not count as letting go. |
+| **Losing it** | Letting go of the boost button, wrecking, a hit while you are not boosting, or boosting below 97 km/h (60 mph) for 3 seconds ends the supercharge and the chain. While you supercharge-boost, a hit never takes the bar below half, and the takedown camera does not count as letting go - but letting go once you drive again does (0.3 s to press boost again after the camera). |
 | **Not changed** | AI cars, **Crash mode** and **online** races always play exactly like the original game. Every other mode can be switched on or off. |
 
 ---
@@ -114,7 +114,7 @@ like the original game. Crash mode and online races are always the original game
 | Partial refill | 80 % | Most a bar refills to when not all arrows were lit (and the supercharge is lost). |
 | Bar counts as full at | 98 % | The bar supercharges from this level (the game may keep it just below 100 % while you boost). |
 | Lose the supercharge when too slow / below / for | on, 97 km/h, 3 s | The slow-speed rule. |
-| Takedown camera grace | 5 s | After a takedown the game stops your boost for the camera; within this time that keeps the supercharge. |
+| Takedown camera grace | 5 s | After a takedown a hit while you are not boosting does not end the supercharge within this time. (Letting go of boost is judged by who drives: while the game drives your car - takedown camera - it never counts; once you drive again you have 0.3 s to press boost, otherwise it is a release. With *Only boost while the button is held* off, Revenge's timing: the grace also covers letting go.) |
 | Wait before supercharging again | 3 s | After a supercharge was lost. |
 | Full while boosting: wait | 0 s | A bar that becomes full while you boost supercharges after this time. |
 | Pause after a refill | 0.6 s | The bar does not drain for this long after it supercharged or refilled. |

@@ -121,8 +121,11 @@ GROUPS = [
              "Supercharge-boosting below the speed below for the time below ends the supercharge."),
         Item("slow_speed", "Too slow below", "Speed for the rule above (96 km/h = 60 mph).", SPEED),
         Item("slow_time", "Too slow for", "Seconds below that speed before the supercharge is lost.", secs(0.5, 10)),
-        Item("takedown_grace", "Takedown camera grace", "After a takedown the game stops your boost for the "
-             "takedown camera. For this many seconds such a stop keeps the supercharge and chain.", secs(0, 15)),
+        Item("takedown_grace", "Takedown camera grace", "After a takedown, a hit while you are not boosting does "
+             "not end the supercharge for this many seconds. Letting go of boost never counts while the game drives "
+             "your car (takedown camera); once you drive again you have 0.3 s to press boost, otherwise it is a "
+             "release. (With 'Only boost while the button is held' off, this grace also covers letting go.)",
+             secs(0, 15)),
         Item("resuper_cooldown", "Wait before supercharging again", "After a supercharge was lost, the bar can "
              "only supercharge again after this many seconds.", secs(0, 10)),
         Item("full_hold_time", "Full while boosting: wait", "When the bar becomes full while you are boosting, "

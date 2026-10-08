@@ -160,3 +160,14 @@ def test_pad_query_used_by_the_controller_in_both_builds(elfs):
         win = [e.r32(site - 4 * k) for k in range(1, 200)]
         assert (3 << 26) | (regions.t(r, 0x111B80) >> 2) in win, key
         assert 0x8CA20000 | cave.C_PAD in win, key                     # lw v0, 0x37B0(a1)
+
+
+@both
+def test_control_flags_read_by_the_controller_in_both_builds(elfs):
+    """game_driving() reads car +0x2CA9 (pad read at all) and +0x3B28 (autopilot) like the pad controller does."""
+    for elf, key in zip(elfs, ("PAL", "USA")):
+        e = Elf(elf)
+        site = regions.t(regions.BY_KEY[key], 0x204E4C)
+        win = [e.r32(site - 4 * k) for k in range(1, 260)]
+        assert 0x90A40000 | cave.C_INPUT in win, key           # lbu a0, 0x2CA9(a1)
+        assert 0x90A60000 | cave.C_AUTO in win, key            # lbu a2, 0x3B28(a1)

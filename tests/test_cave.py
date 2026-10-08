@@ -39,6 +39,7 @@ class Game:
         m.w32(A["NCARS"], 1); m.w32(A["CARPTRS"], CAR)
         m.w32(CAR + cave.C_CTRL, ctrl); m.w32(CAR + cave.C_IDX, idx); m.wf32(CAR + cave.C_SPEED, 50.0)
         m.wf32(CAR + cave.C_TIME, 10.0)
+        m.write(CAR + cave.C_INPUT, b"\1")         # the player drives (pad read, no autopilot)
         m.w32(BOOST + cave.B_CAR, CAR); self.set_bar(bar); m.wf32(BOOST + cave.B_RATE, 10.0)
         m.w32(A["HUDTEX"] + 4 * 28, 0x01234560)
         for k in range(10):     # bar colours: (k, 0, 100+k, 0)
@@ -452,11 +453,11 @@ def test_race_start_sequence_then_blue_quickly():
 # ------------------------------------------------------------------------------------------- v5: fixed full bar
 def test_hud_segment_count_follows_forced_size():
     g = Game(bar=0); g.tick()
-    hud = 0x60000; g.cpu.m.w32(hud + cave.C_HUDCAR, CAR); g.cpu.m.write(hud + cave.HUD_SEGS, b"")
+    hud = 0x60000; g.cpu.m.w32(hud + cave.C_HUDCAR, CAR); g.cpu.m.write(hud + cave.HUD_SEGS, b"\1")
     pptr = 0x61000; g.cpu.m.w32(pptr, hud)
     g.run("TINT", a1=pptr)
     assert g.cpu.m.read(hud + cave.HUD_SEGS, 1)[0] == 4         # no size-change animation / sounds
-    gai = Game(ctrl=1, bar=0); gai.tick(); gai.cpu.m.w32(hud + cave.C_HUDCAR, CAR); gai.cpu.m.write(hud + cave.HUD_SEGS, b"")
+    gai = Game(ctrl=1, bar=0); gai.tick(); gai.cpu.m.w32(hud + cave.C_HUDCAR, CAR); gai.cpu.m.write(hud + cave.HUD_SEGS, b"\1")
     gai.cpu.m.w32(pptr, hud); gai.run("TINT", a1=pptr)
     assert gai.cpu.m.read(hud + cave.HUD_SEGS, 1)[0] == 1 and gai.u(BOOST + cave.B_IDX) == 0   # AI untouched
 
