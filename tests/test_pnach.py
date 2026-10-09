@@ -129,3 +129,19 @@ def test_cheat_memory_equals_the_iso_build(iso):
     other = os.environ.get("CHAINKIT_OTHER_PNACH", "")
     if other and os.path.exists(other) and region["key"] == "PAL":
         assert pnach.overlaps(text, open(other, encoding="utf-8", errors="replace").read()) == []
+
+
+@pytest.mark.skipif(not ISOS, reason="set CHAINKIT_ISO / CHAINKIT_ISO_PAL / CHAINKIT_ISO_USA")
+@pytest.mark.parametrize("iso", ISOS)
+def test_cheat_with_chainkit_arrow_equals_the_iso_build(iso):
+    from chainkit import arrowart, assets
+    with core.Disc(iso) as d:
+        if d.applied:
+            pytest.skip("ISO already has the mod")
+        elf, txd = d.elf, d.img.read_file(assets.GLOBAL_TXD)
+    blob = pnach.arrow_blob_record(arrowart.chainkit_record(txd))
+    text, _ = pnach.render(elf, settings.DEFAULTS, tex_blob=blob, art="chainkit")
+    patched, _ = elfpatch.patch(elf, dict(settings.DEFAULTS, arrow_tex_slot=28), inline_texts=True, tex_blob=blob)
+    want, got = pnach.loaded_words(patched), pnach.apply(elf, text)
+    assert {a: w for a, w in want.items() if got.get(a, 0) != w} == {}
+    assert "ChainKit's arrow" in text and "personal use" in text

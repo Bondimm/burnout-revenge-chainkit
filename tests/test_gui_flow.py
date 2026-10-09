@@ -97,8 +97,8 @@ def test_gui_flow(tmp_path, monkeypatch):
         # ---- reopen the saved ISO: the mod and these settings are found, nothing to save yet
         g.open_saved()
         assert _wait(g).ok and g.disc.applied and g.disc.path == out1
-        assert not settings.changed(g.values, dict(wanted, arrow_tex_slot=28 if DOM else 12))
-        assert g.disc.arrow_art == ("dominator" if DOM else "chevron")
+        assert not settings.changed(g.values, dict(wanted, arrow_tex_slot=28))
+        assert g.disc.arrow_art == ("dominator" if DOM else "chainkit")
         assert "already has the mod" in g.save_problem()
         assert g.out_path != out1
 
@@ -118,7 +118,7 @@ def test_gui_flow(tmp_path, monkeypatch):
         g.open_saved()
         assert _wait(g).ok and g.disc.path == out2
         assert not settings.changed(g.values, wanted2) and not g.changed_settings()
-        assert g.disc.arrow_art == ("dominator" if DOM else "chevron")
+        assert g.disc.arrow_art == ("dominator" if DOM else "chainkit")
     finally:
         if log.file:
             log.file.close()

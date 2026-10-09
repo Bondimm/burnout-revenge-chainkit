@@ -5,7 +5,8 @@ Always writes a NEW image (the source is only read):
     boot ELF            code + data in the top of the unused .sndata hole, hooks, PCSX2 CRC kept (elfpatch)
     MAIN{UK,FR,GE,US}.BIN  the HUD message texts (assets.TEXTS)
     DATA/GLOBAL.TXD     Dominator's Boost_Arrow in place of the online TalkIcon (same size and format) when you give
-                        your own Burnout Dominator image; without it the arrows use Revenge's own chevron
+                        your own Burnout Dominator image; without it ChainKit's arrow (Revenge's chevron slash
+                        repainted, made from your own disc - arrowart.py) in the same place
 Works on the original disc and on MusicKit / CarKit output (run MusicKit before ChainKit).
 """
 import hashlib
@@ -104,10 +105,15 @@ class Disc:
 
     @property
     def arrow_art(self):
-        """'dominator', 'chevron' (mod applied) or None."""
+        """'chainkit', 'dominator', 'chevron' (older builds) for an image with the mod, else None."""
         if not self.values:
             return None
-        return "dominator" if self.values["arrow_tex_slot"] == SLOT_DOMINATOR else "chevron"
+        if self.values["arrow_tex_slot"] != SLOT_DOMINATOR:
+            return "chevron"
+        if not hasattr(self, "_art"):
+            from . import arrowart
+            self._art = "chainkit" if arrowart.is_chainkit(self.img.read_file(assets.GLOBAL_TXD)) else "dominator"
+        return self._art
 
     def problems(self):
         """Plain-words reasons why this disc cannot be used (empty = fine)."""
@@ -195,9 +201,11 @@ def build(src, out, values=None, dominator=None, log=print, progress=None):
             raise KitError("this ISO already has the Burnout Chain mod - open it to change its settings")
         log("source: %s (%s)" % (os.path.basename(src), d.summary()))
         txd = _arrow(d, dominator, log)
-        values["arrow_tex_slot"] = SLOT_DOMINATOR if txd else SLOT_CHEVRON
         if not txd:
-            log("arrow texture: Revenge's own chevron (no Burnout Dominator ISO chosen)")
+            from . import arrowart
+            txd = arrowart.merge(d.img.read_file(assets.GLOBAL_TXD))
+            log("arrow texture: ChainKit's arrow (Revenge's chevron slash repainted, made from your disc)")
+        values["arrow_tex_slot"] = SLOT_DOMINATOR
         reps = {}
         try:
             elf, rep = elfpatch.patch(d.elf, values)
@@ -289,8 +297,13 @@ def validate(src, out, dominator=None, log=print, quick=False):
             log("arrow texture: %s" % ("Burnout Dominator's Boost_Arrow" if merged else "NOT merged"))
             ok &= bool(merged) and art == "dominator"
         else:
-            log("arrow texture: %s" % ("Burnout Dominator's Boost_Arrow" if art == "dominator"
-                                       else "Revenge's chevron"))
+            log("arrow texture: %s" % {"dominator": "Burnout Dominator's Boost_Arrow", "chainkit": "ChainKit's arrow",
+                                       "chevron": "Revenge's chevron"}.get(art, "-"))
+            if art == "chainkit":
+                from . import arrowart
+                good = arrowart.is_chainkit(o.img.read_file(assets.GLOBAL_TXD), s.img.read_file(assets.GLOBAL_TXD))
+                log("ChainKit arrow texture: %s" % ("OK" if good else "DIFFERENT"))
+                ok &= good
         if s.musickit or o.musickit:
             kept = s.songs == o.songs and o.musickit == s.musickit
             log("MusicKit song list: %s" % ("kept (%d songs)" % o.songs if kept else "CHANGED"))
@@ -372,16 +385,20 @@ def build_pnach(src, out_dir, values=None, force=False, check_with=(), log=print
             raise KitError("this ISO already has the Burnout Chain mod - make the cheat from your ISO without the "
                            "mod (and do not use the cheat together with a ChainKit ISO)")
         log("source: %s (%s)" % (os.path.basename(src), d.summary()))
-        blob = None
+        from . import arrowart
+        gtxd = d.img.read_file(assets.GLOBAL_TXD)
         if dominator:
             try:
-                blob = pnach.arrow_blob(d.img.read_file(assets.GLOBAL_TXD), dominator_txd(dominator))
+                blob = pnach.arrow_blob(gtxd, dominator_txd(dominator))
             except ValueError as exc:
                 raise KitError("the Dominator arrow texture does not fit (%s)" % exc)
-            if d.musickit and d.songs > 95:
-                raise KitError("this ISO has more than 95 MusicKit songs: no room for the arrow texture")
+        else:
+            blob = pnach.arrow_blob_record(arrowart.chainkit_record(gtxd))
+        if d.musickit and d.songs > 95:
+            raise KitError("this ISO has more than 95 MusicKit songs: no room for the arrow texture")
         try:
-            text, region = pnach.render(d.elf, values, settings.preset_of(values), blob)
+            text, region = pnach.render(d.elf, values, settings.preset_of(values), blob,
+                                        art="dominator" if dominator else "chainkit")
         except elfpatch.ChainError as exc:
             raise KitError(str(exc))
     path = os.path.join(out_dir, pnach.file_name(region))
@@ -398,6 +415,6 @@ def build_pnach(src, out_dir, values=None, force=False, check_with=(), log=print
         f.write(text)
     n = text.count("\npatch=")
     log("PCSX2 cheat: %s (%d memory writes, arrows: %s, English pop-up texts)" % (
-        path, n, "Burnout Dominator's arrow - personal use only, do not share the file" if blob is not None
-        else "Revenge's chevron"))
+        path, n, "Burnout Dominator's arrow - personal use only, do not share the file" if dominator
+        else "ChainKit's arrow (made from your disc - personal use, do not share the file)"))
     return path

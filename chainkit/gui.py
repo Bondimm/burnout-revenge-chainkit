@@ -181,7 +181,7 @@ class ChainKitGui:
         return [n for n in settings.changed(self.values, base) if n != "arrow_tex_slot"]
 
     def adds_arrow(self):
-        """A Dominator ISO is chosen and the selected modded ISO still uses Revenge's chevron."""
+        """A Dominator ISO is chosen and the selected modded ISO does not have Dominator's arrow yet."""
         return bool(self.dom_ok and self.disc and self.disc.applied and self.disc.arrow_art != "dominator")
 
     def pnach_path(self):
@@ -211,7 +211,7 @@ class ChainKitGui:
             return None
         if self.dom_path and not self.dom_ok and not self.dom_error:
             return "wait until the Burnout Dominator ISO has been checked"
-        # an unusable Dominator ISO never blocks saving: it is optional, the arrows then use Revenge's chevron
+        # an unusable Dominator ISO never blocks saving: it is optional, the arrows then use ChainKit's arrow
         if self.disc.applied and not self.changed_settings() and not self.adds_arrow():
             return "this ISO already has the mod with these settings: change a setting first"
         out = self.out_path.strip()
@@ -531,7 +531,7 @@ class ChainKitGui:
         U.text(GREY, "Europe (SLES-53507) or USA (SLUS-21242). With MusicKit: run MusicKit first, then ChainKit "
                      "on its new ISO.")
         # ---- 2
-        U.step(2, "Arrow art: your Burnout Dominator ISO (optional)", self.dom_ok)
+        U.step(2, "Arrow art: ChainKit's arrow, or Dominator's from your own disc (optional)", self.dom_ok)
         U.text(GREY, "Optional - you do not need Burnout Dominator. It only changes how the 16 arrows look; the "
                      "supercharge, arrows and Burnout chain work the same without it.")
         imgui.begin_disabled(busy)
@@ -550,18 +550,20 @@ class ChainKitGui:
             U.text(YELLOW, "Dominator's arrow will be copied into the cheat file: it then contains EA artwork from "
                            "your disc - for your personal use only, do not share it.")
         elif self.output_type == "pnach":
-            U.text(GREY, "Without it the cheat uses Revenge's own chevron for the arrows.")
+            U.text(GREY, "Without it the cheat uses ChainKit's arrow (Revenge's chevron repainted, made from your "
+                         "ISO).")
         elif self.dom_ok:
             U.text(GREEN, "Dominator's arrow will be used.")
         elif self.dom_path and self.dom_error:
-            U.text(YELLOW, "! %s - not used: the arrows will use Revenge's own chevron." % self.dom_error)
+            U.text(YELLOW, "! %s - not used: the arrows will use ChainKit's arrow." % self.dom_error)
         elif not self.dom_path:
             if self.disc and self.disc.applied:
-                U.text(GREY, "This ISO uses %s." % ("Dominator's arrow" if self.disc.arrow_art == "dominator"
-                                                   else "Revenge's chevron for the arrows"))
+                U.text(GREY, "This ISO uses %s." % {"dominator": "Dominator's arrow", "chainkit": "ChainKit's arrow",
+                                                    "chevron": "Revenge's chevron for the arrows"}.get(
+                    self.disc.arrow_art, "-"))
             else:
-                U.text(GREY, "Without it the arrows use Revenge's own chevron. ChainKit includes no game data: the "
-                             "arrow image is taken from your own Burnout Dominator disc image.")
+                U.text(GREY, "Without it the arrows use ChainKit's arrow: Revenge's own chevron slash, repainted (made "
+                             "from your Revenge ISO). ChainKit includes no game data.")
         # ---- 3
         U.step(3, "Save", bool(self.last_save and self.last_save["ok"]))
         imgui.begin_disabled(busy)
@@ -574,7 +576,7 @@ class ChainKitGui:
             self.output_type = "pnach"
         U.tip("Writes a small cheat file for PCSX2 instead: no new ISO, switch it on or off in PCSX2's cheat list. "
               "PCSX2 only (not a real PS2), English pop-ups; Dominator's arrow only with your Dominator ISO (step 2), "
-              "otherwise Revenge's chevron.")
+              "otherwise ChainKit's arrow.")
         if self.output_type == "iso":
             imgui.set_next_item_width(-U.bw("Browse..."))
             _, self.out_path = imgui.input_text("##out", self.out_path)

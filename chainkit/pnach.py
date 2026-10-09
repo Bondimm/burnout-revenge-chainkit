@@ -70,6 +70,13 @@ def arrow_blob(revenge_txd, dominator_txd):
     return merged[ro + cave.TEX_FROM:ro + rs]
 
 
+def arrow_blob_record(record):
+    """Texture data (TEX_FROM..TEX_SIZE) of a ready TalkIcon-format record (e.g. ChainKit's own arrow)."""
+    if len(record) != cave.TEX_SIZE:
+        raise elfpatch.ChainError("unexpected arrow texture size %#x" % len(record))
+    return record[cave.TEX_FROM:]
+
+
 def writes(elf_data, values, tex_blob=None):
     """[(address, word, 'once'|'continuous')] for the cheat. elf_data = the game's executable (original, MusicKit or
     CarKit output; not one that already has ChainKit). tex_blob = arrow_blob(...) for Dominator's arrow."""
@@ -97,12 +104,14 @@ def writes(elf_data, values, tex_blob=None):
     return out, region
 
 
-def render(elf_data, values, preset=None, tex_blob=None):
-    """The .pnach file text."""
+def render(elf_data, values, preset=None, tex_blob=None, art="dominator"):
+    """The .pnach file text. art: 'dominator' or 'chainkit' (what tex_blob is), ignored without tex_blob."""
     ws, region = writes(elf_data, values, tex_blob)
     key = region["key"]
-    if tex_blob is not None:
+    if tex_blob is not None and art == "dominator":
         arrows = "Burnout Dominator's arrow from your own disc (personal use only: do not share this file)"
+    elif tex_blob is not None:
+        arrows = "ChainKit's arrow (Revenge's chevron repainted, made from your disc: personal use, do not share)"
     else:
         arrows = "Revenge's chevron"
     name = preset or settings.preset_of(settings.check(values)) or "custom"
@@ -113,8 +122,9 @@ def render(elf_data, values, preset=None, tex_blob=None):
              "// %d words, all written once when the game boots (patch=0): switch the cheat on, then start "
              "(or restart) the game." % len(ws)]
     if tex_blob is not None:
-        lines.append("// Contains texture data of Burnout Dominator (Electronic Arts) taken from your own disc: "
-                     "for your personal use only - do not share or upload this file.")
+        lines.append("// Contains texture data made from your own %s disc (Electronic Arts): for your personal "
+                     "use only - do not share or upload this file." % ("Burnout Dominator" if art == "dominator"
+                                                                     else "Burnout Revenge"))
     for addr, w, kind in ws:
         lines.append("patch=0,EE,2%07X,extended,%08X" % (addr, w))
     return "\n".join(lines) + "\n", region

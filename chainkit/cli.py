@@ -192,7 +192,8 @@ def _run(a, ap):
             if d.applied and not d.musickit:
                 print("note: to add MusicKit songs, run MusicKit on the ISO without ChainKit first, then ChainKit")
             if d.values:
-                print("arrow art: %s" % ("Burnout Dominator" if d.arrow_art == "dominator" else "Revenge's chevron"))
+                print("arrow art: %s" % {"dominator": "Burnout Dominator", "chainkit": "ChainKit's arrow",
+                                         "chevron": "Revenge's chevron"}.get(d.arrow_art, "-"))
                 print("settings: %s" % (settings.preset_of(d.values) or "custom"))
                 for line in settings.describe(d.values):
                     print(line)
