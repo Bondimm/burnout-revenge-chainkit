@@ -1,6 +1,6 @@
 """The patch on the real game executable, read from your Burnout Revenge ISO (only read, nothing is written).
 
-Runs only when CHAINKIT_ISO points to a Burnout Revenge ISO (Europe or USA) WITHOUT the mod (MusicKit / CarKit
+Runs only when CHAINKIT_ISO points to a Burnout Revenge ISO (Europe or USA) WITHOUT the mod (MusicKit / car mod
 output is fine):
     set CHAINKIT_ISO=D:\\path\\to\\Burnout Revenge.iso          (macOS: export CHAINKIT_ISO=...)
     .venv\\Scripts\\python -m pytest tests\\test_elf.py -v

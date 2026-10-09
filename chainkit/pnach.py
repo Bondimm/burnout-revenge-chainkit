@@ -79,7 +79,7 @@ def arrow_blob_record(record):
 
 def writes(elf_data, values, tex_blob=None):
     """[(address, word, 'once'|'continuous')] for the cheat. elf_data = the game's executable (original, MusicKit or
-    CarKit output; not one that already has ChainKit). tex_blob = arrow_blob(...) for Dominator's arrow."""
+    car mod output; not one that already has ChainKit). tex_blob = arrow_blob(...) for Dominator's arrow."""
     if elfpatch.is_applied(elf_data):
         raise elfpatch.ChainError("this executable already has the Burnout Chain mod (ISO version): make the cheat "
                                   "from your ISO without the mod, and do not use both together")

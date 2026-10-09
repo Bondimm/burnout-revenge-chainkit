@@ -1,11 +1,11 @@
 """Apply / inspect the Burnout Chain patch on the Burnout Revenge executable: Europe / PAL SLES_535.07 or
 USA / NTSC SLUS_212.42 (the build is recognised by its PCSX2 CRC; regions.py).
 
-Works on the original ELF and on CarKit-ISO / MusicKit output:
+Works on the original ELF and on MusicKit output and car mods:
 - the code + data go into the top of the .sndata hole (PAL 0x4A4000..0x4A7680, USA 0x4A3E80..0x4A7500); if segment 0
   does not cover the hole yet it is extended exactly like MusicKit does (hole inserted into the file, later
   sections shifted);
-- MusicKit's song table lives at the bottom of the hole (<= 1200 bytes), CarKit uses the gap after .text and code at
+- MusicKit's song table lives at the bottom of the hole (<= 1200 bytes), car mods use the gap after .text and code at
   PAL 0x134D68..0x134D74 - none of these overlap;
 - the PCSX2 CRC (XOR of all ELF words) is kept with the compensation word after the file content.
 """
@@ -17,7 +17,7 @@ from .elf import Elf, crc, _fix_crc
 PAL_CRC = regions.PAL["crc"]
 USA_CRC = regions.USA["crc"]
 CRCS = {r["crc"]: r for r in (regions.PAL, regions.USA)}
-CARKIT_CODE = (0x134D68, 0x134D78)          # PAL; translated per build
+CAR_CODE = (0x134D68, 0x134D78)             # PAL; translated per build
 
 
 def region_of(data, allow_unknown=False):
@@ -42,9 +42,9 @@ def text_range(e):
     return s0[2], s0[2] + s0[4]
 
 
-def carkit_ranges(e, region):
-    """Addresses CarKit ISO may write: its code site and the padding gap after .text (like carkitiso.elfcar)."""
-    out = [(regions.t(region, CARKIT_CODE[0]), regions.t(region, CARKIT_CODE[0]) + 0x10)]
+def car_code_ranges(e, region):
+    """Addresses a car mod may write: the car code site and the padding gap after .text."""
+    out = [(regions.t(region, CAR_CODE[0]), regions.t(region, CAR_CODE[0]) + 0x10)]
     secs = sorted((sh for sh in e.sections() if sh[3] and sh[1] in (1, 8)), key=lambda sh: sh[3])
     t0, t1 = text_range(e)
     nxt = min((sh[3] for sh in secs if sh[3] >= t1), default=None)
@@ -129,7 +129,7 @@ def build(lay=None, tunables=None, old_table=None):
 
 
 def patch(data, tunables=None, inline_texts=False, tex_blob=None):
-    """Return (patched ELF bytes, report dict). `data` = the PAL or USA executable (original, CarKit and/or
+    """Return (patched ELF bytes, report dict). `data` = the PAL or USA executable (original, car mod and/or
     MusicKit output). inline_texts: the pop-up texts come from the cave (used for the PCSX2 cheat)."""
     if is_applied(data):
         raise ChainError("the Burnout Chain patch is already applied (use 'tune' to change settings)")
@@ -290,9 +290,9 @@ def check(data, log=print):
             bad.append("hook %#x not applied" % va)
     touched = [(va, va + 4) for va, *_ in hk] + [(A["REGION"], A["HOLE_END"])]
     for lo, hi in touched:
-        for a, b in carkit_ranges(e, region) + [region["musickit_table"]]:
+        for a, b in car_code_ranges(e, region) + [region["musickit_table"]]:
             if lo < b and a < hi:
-                bad.append("overlap with CarKit/MusicKit at %#x" % lo)
+                bad.append("overlap with a car mod/MusicKit at %#x" % lo)
         for p in region["pnach"]:
             if lo <= p < hi:
                 bad.append("overlap with PCSX2 pnach at %#x" % p)

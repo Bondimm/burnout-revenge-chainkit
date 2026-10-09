@@ -101,7 +101,7 @@ def test_demo_mode_reads_no_file(g):
     d = gui.ChainKitGui(g.log, {"demo": {"disc": {
         "path": "Burnout Revenge (Europe).iso", "summary": "Burnout Revenge Europe", "applied": True,
         "values": settings.to_json(settings.DEFAULTS)["settings"], "problems": [], "arrow_art": "dominator",
-        "musickit": False, "carkit": False, "songs": 41, "crc": 0x7E83CC5B, "langs": ["UK"]}},
+        "musickit": False, "cars_changed": False, "songs": 41, "crc": 0x7E83CC5B, "langs": ["UK"]}},
         "out": "Burnout Revenge (Europe) (Burnout Chain settings).iso"})
     assert d.disc.applied and d.job is None
     assert "already has the mod with these settings" in d.save_problem()
@@ -129,7 +129,7 @@ def test_pnach_output_choice(g, tmp_path):
     from chainkit import core, regions
     d = gui.ChainKitGui(g.log, {"demo": {"disc": {
         "path": "Burnout Revenge (Europe).iso", "summary": "Burnout Revenge Europe", "applied": False,
-        "values": None, "problems": [], "arrow_art": None, "musickit": False, "carkit": False, "songs": 41,
+        "values": None, "problems": [], "arrow_art": None, "musickit": False, "cars_changed": False, "songs": 41,
         "crc": 0x7E83CC5B, "langs": ["UK"], "region": regions.PAL}}})
     assert d.output_type == "iso" and d.pnach_dir == core.KIT_DIR
     d.output_type = "pnach"

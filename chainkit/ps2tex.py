@@ -5,7 +5,7 @@ e.g. PSMCT16) but drawn in another (TEX0.PSM, e.g. PSMT4), so the bytes in the f
 format read as the other. This module models GS local memory with PCSX2's swizzle tables (pcsx2/GS/GSTables.cpp:
 block and column tables of PSMCT32 / PSMCT16 / PSMT4) to translate between the two.
 
-Record layout (shared with the car textures, see CarKit's FORMAT.md):
+Record layout (shared with the car textures):
   +0x04 bitmap offset, +0x08 CLUT data offset, +0x0C/+0x10 width/height, +0x14 bits per pixel, +0x3C GS TEX0,
   +0x100 upload list (2 x 0x40: BITBLTBUF for the bitmap / the CLUT), bitmap at +0x04 behind its GIF A+D block
   (TRXREG = transfer rectangle), CLUT data at +0x08 behind its own A+D block.

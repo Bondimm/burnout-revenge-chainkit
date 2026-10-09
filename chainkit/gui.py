@@ -107,7 +107,7 @@ def disc_info(path):
     """Everything the window shows about an ISO (read once; the file is closed again)."""
     with core.Disc(path) as d:
         return SimpleNamespace(path=path, summary=d.summary(), applied=d.applied, values=d.values,
-                               problems=d.problems(), arrow_art=d.arrow_art, musickit=d.musickit, carkit=d.carkit,
+                               problems=d.problems(), arrow_art=d.arrow_art, musickit=d.musickit, cars_changed=d.cars_changed,
                                songs=d.songs, crc=d.crc, langs=d.langs, region=d.region)
 
 

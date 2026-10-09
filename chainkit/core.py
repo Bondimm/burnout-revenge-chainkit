@@ -7,7 +7,7 @@ Always writes a NEW image (the source is only read):
     DATA/GLOBAL.TXD     Dominator's Boost_Arrow in place of the online TalkIcon (same size and format) when you give
                         your own Burnout Dominator image; without it ChainKit's arrow (Revenge's chevron slash
                         repainted, made from your own disc - arrowart.py) in the same place
-Works on the original disc and on MusicKit / CarKit output (run MusicKit before ChainKit).
+Works on the original disc and on MusicKit output and discs with changed car code (run MusicKit before ChainKit).
 """
 import hashlib
 import os
@@ -22,7 +22,7 @@ SUPPORTED = "Europe / PAL (SLES-53507) or USA / NTSC (SLUS-21242)"
 SLOT_DOMINATOR, SLOT_CHEVRON = 28, 12
 # MusicKit: playlist struct, original song table (PAL addresses, translated per build), 41 original songs
 MK_PLAYLIST, MK_TABLE_OLD, MK_SONGS = 0x460640, 0x460450, 41
-CARKIT_SITE = 0x134D68                 # CarKit changes the 4 words from here (PAL address)
+CAR_CODE_SITE = 0x134D68               # car mods change the 4 words from here (PAL address)
 
 
 class KitError(Exception):
@@ -56,7 +56,7 @@ def _open(path, what="ISO"):
 
 
 def elf_facts(elf, region=None):
-    """Other kits on the executable: MusicKit (song table moved into the hole), CarKit (car code changed), and a
+    """Other kits on the executable: MusicKit (song table moved into the hole), a car mod (car code changed), and a
     song list broken by running MusicKit after ChainKit (MusicKit then sees the hole already opened, skips its own
     code changes and only raises the song count of the original 41-song table)."""
     region = region or elfpatch.region_of(elf)
@@ -65,10 +65,10 @@ def elf_facts(elf, region=None):
     hole_open = ph[0][2] + ph[0][4] == ph[1][2]
     pl = regions.t(region, MK_PLAYLIST)
     count, table = e.r32(pl + 4), e.r32(pl + 0x4C)
-    site = regions.t(region, CARKIT_SITE)
+    site = regions.t(region, CAR_CODE_SITE)
     return dict(hole_open=hole_open, songs=count, musickit=hole_open and table == region["mk_table_new"],
                 music_broken=table == regions.t(region, MK_TABLE_OLD) and count != MK_SONGS,
-                carkit=any(e.r32(site + 4 * k) != w for k, w in enumerate(region["carkit_orig"])))
+                cars_changed=any(e.r32(site + 4 * k) != w for k, w in enumerate(region["car_code_orig"])))
 
 
 class Disc:
@@ -128,7 +128,7 @@ class Disc:
 
     def summary(self):
         s = "Burnout Revenge %s" % self.region["short"] + (" with the Burnout Chain mod" if self.applied else "")
-        extra = [k for k, on in (("MusicKit songs (%d)" % self.songs, self.musickit), ("changed cars", self.carkit))
+        extra = [k for k, on in (("MusicKit songs (%d)" % self.songs, self.musickit), ("changed cars", self.cars_changed))
                  if on]
         return s + (" + " + ", ".join(extra) if extra else "")
 

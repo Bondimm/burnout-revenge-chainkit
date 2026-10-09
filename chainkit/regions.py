@@ -26,7 +26,7 @@ PAL_CODE_ADDRS = sorted({
     # award call sites (return addresses saved by FUN_002a3e80)
     0x2CC4A0, 0x2CC4BC, 0x2CC6DC, 0x2CC6F8, 0x2CE254, 0x2CDF58, 0x2CDF70, 0x2CE8AC, 0x2CC15C, 0x2CC178, 0x2CAF34,
     0x2CB370, 0x2CCB18, 0x2CEDAC, 0x2CCD20,
-    # CarKit's patch site (for the overlap check / detection)
+    # car mods' patch site (for the overlap check / detection)
     0x134D68, 0x134D6C, 0x134D70, 0x134D74,
 })
 # data: globals, tables, the game-mode classes (vtables), MusicKit's playlist
@@ -56,7 +56,7 @@ PAL = dict(
     hole=(0x4A3678, 0x4A7680),                   # unused .sndata gap between the two load segments
     musickit_table=(0x4A3678, 0x4A3680 + 100 * 12),
     mk_table_new=0x4A3680,
-    carkit_orig=(0x3C02004B, 0xAFA3000C, 0x2451DE38, 0x24100002),   # words at PAL 0x134D68.. before CarKit
+    car_code_orig=(0x3C02004B, 0xAFA3000C, 0x2451DE38, 0x24100002),  # words at PAL 0x134D68.. unmodded
     pnach=[0x3A64A8, 0x1BFEB10],                 # PCSX2 widescreen patch (same list as musickit.validate)
     map=None,
 )
@@ -66,7 +66,7 @@ USA = dict(
     hole=(0x4A34F8, 0x4A7500),
     musickit_table=(0x4A34F8, 0x4A3500 + 100 * 12),
     mk_table_new=0x4A3500,
-    carkit_orig=(0x3C02004B, 0xAFA3000C, 0x2451DCE8, 0x24100002),   # (read from SLUS_212.42 at the mapped site)
+    car_code_orig=(0x3C02004B, 0xAFA3000C, 0x2451DCE8, 0x24100002),  # (read from SLUS_212.42 at the mapped site)
     pnach=[0x1398C0, 0x1398C8, 0x16BCA8, 0x16BCAC, 0x1C02438, 0x1C02448, 0x1C02398, 0x1C02410, 0x1BFE698, 0x10DA78,
            0x167844, 0x1C02108, 0x32677C, 0x1BFE7BA, 0x1BFE7B8, 0x1125F4, 0x1125EC, 0x104B9C, 0x19778C, 0x1765E8,
            0x1767DC, 0x210FA8, 0x2B5334],        # PCSX2 patches for the USA build (same list as musickit.validate)
