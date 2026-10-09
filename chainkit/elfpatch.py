@@ -221,7 +221,7 @@ INNER = (0x2A3EEC, 0x2A3A9C, 0x15E3BC, 0x15DCF4, 0x15DD0C, 0x2A3F54, 0x2C890C, 0
 
 
 def message_table(e, lay):
-    """[(id, display flags, name)] of the HUD message table the patched game really uses (read back from the
+    """[(id, display flags, name, sign style)] of the HUD message table the patched game really uses (read back from the
     relocated lui/addiu pair and loop count of FUN_0016fcf0)."""
     hi, lo = e.r32(lay.t(0x16FCFC)) & 0xFFFF, e.r32(lay.t(0x16FD0C)) & 0xFFFF
     table = ((hi << 16) + (lo - 0x10000 if lo & 0x8000 else lo)) & 0xFFFFFFFF
@@ -234,7 +234,7 @@ def message_table(e, lay):
             name = bytes(e.d[o:o + 40]).split(b"\0")[0].decode("latin-1")
         except KeyError:
             name = None
-        out.append((w0 & 0xFF, (w0 >> 8) & 0xFF, name))
+        out.append((w0 & 0xFF, (w0 >> 8) & 0xFF, name, (w0 >> 16) & 0xFF))
     return out
 
 
@@ -243,17 +243,28 @@ def message_problems(e, lay):
     the game does not refuse (an id the original table already has would show the game's message instead)."""
     bad = []
     tab = message_table(e, lay)
-    ids = [i for i, _, _ in tab]
+    ids = [t[0] for t in tab]
     for name, mid, flags, lvl in cave.NEW_MESSAGES:
         hits = [t for t in tab if t[0] == mid]
         if len(hits) != 1:
             bad.append("message id %#x used %d times in the table (%s)" % (mid, len(hits), name))
-        elif hits[0][2] != name or hits[0][1] != flags:
+        elif hits[0][2] != name or hits[0][1] != flags or hits[0][3] != cave.msg_style(mid):
             bad.append("message id %#x is %r, not %s" % (mid, hits[0][2], name))
         if mid in cave.REFUSED_MSG_IDS:
             bad.append("message id %#x is refused by the game" % mid)
     if len(set(ids)) != len(ids):
         bad.append("duplicate message ids in the table")
+    # SUPERCHARGE LOST looks like the game's own negative messages: same red colour bit and sign style
+    neg = [t for t in tab if t[2] and t[2].startswith(("BadSlam", "BadShunt", "BadNudge", "BadSideswipe"))]
+    lost = [t for t in tab if t[0] == cave.M_LOST]
+    if not neg:
+        bad.append("the game's negative messages (BadSlam...) are not in the table")
+    elif lost:
+        if {t[3] for t in neg} != {lost[0][3]}:
+            bad.append("SUPERCHARGE LOST sign style %d is not the negative messages' %s"
+                       % (lost[0][3], sorted({t[3] for t in neg})))
+        if {t[1] & cave.MSG_RED_BIT for t in neg} != {lost[0][1] & cave.MSG_RED_BIT}:
+            bad.append("SUPERCHARGE LOST is not in the negative messages' red colour")
     return bad
 
 

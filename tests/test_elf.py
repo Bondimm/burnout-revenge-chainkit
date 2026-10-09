@@ -113,4 +113,30 @@ def test_every_popup_reaches_the_game(elf):
     for mid in (cave.M_SUPER, cave.M_BURNOUT, cave.M_LOST, cave.M_DOMI, cave.M_WOW, cave.M_DBGPAD, cave.M_DBGAUTO,
                 cave.M_DBGTAP, cave.M_DBGBLOCK):
         hits = [t for t in tab if t[0] == mid]
-        assert hits == [(mid, names[mid][1], names[mid][0])], hex(mid)
+        assert hits == [(mid, names[mid][1], names[mid][0], cave.msg_style(mid))], hex(mid)
+
+
+def test_supercharge_lost_is_red_with_the_negative_sign(elf):
+    """SUPERCHARGE LOST uses the colour bit and sign style of the game's own negative messages (BadSlam1,
+    BadShunt1: text red, red diamond sign = HUD texture 0), keeps its slot (bit0) and level; the others stay normal."""
+    out, _ = elfpatch.patch(elf, settings.DEFAULTS)
+    tab = elfpatch.message_table(Elf(out), elfpatch.layout(out))
+    by_name = {t[2]: t for t in tab}
+    lost = [t for t in tab if t[0] == cave.M_LOST][0]
+    for game in ("BadSlam1", "BadShunt1"):
+        assert lost[3] == by_name[game][3] == cave.MSG_STYLE_NEG
+        assert lost[1] & cave.MSG_RED_BIT == by_name[game][1] & cave.MSG_RED_BIT == 0
+    assert lost[1] & 1 == 1
+    for t in tab:
+        if t[0] in (cave.M_SUPER, cave.M_BURNOUT, cave.M_DOMI, cave.M_WOW):
+            assert t[3] == cave.MSG_STYLE_POS and t[1] & cave.MSG_RED_BIT, hex(t[0])
+    # a LOST entry in the normal style is caught
+    e = Elf(out)
+    lay = elfpatch.layout(out)
+    k = [t[0] for t in tab].index(cave.M_LOST)
+    hi, lo = e.r32(lay.t(0x16FCFC)) & 0xFFFF, e.r32(lay.t(0x16FD0C)) & 0xFFFF
+    table = ((hi << 16) + (lo - 0x10000 if lo & 0x8000 else lo)) & 0xFFFFFFFF
+    o = e.file_offset(table + 12 * k)
+    d = bytearray(out)
+    d[o + 1], d[o + 2] = 0x03, 0x01
+    assert elfpatch.message_problems(Elf(bytes(d)), lay)

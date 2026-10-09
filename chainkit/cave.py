@@ -70,7 +70,7 @@ NAMES = 0xEF0            # message names (ASCII; after the mode table)
 SCORN = 0x3C0            # shadow quad corners (32 bytes)
 MSGTAB = 0x400           # relocated + extended message table
 MAGIC = b"CHAINKIT"
-VERSION = 10             # 10: arrow count / margins (edge to edge); 9: SUPERCHARGE LOST always; 8: release = no button while the player drives; 7: debug message ids moved to free ids; 6: autopilot boost start refused; 3: per-mode switches, per-action fill factors, label/hint switches; 4: BTN hook;
+VERSION = 11             # 11: SUPERCHARGE LOST red with the negative sign; 10: arrow count / margins (edge to edge); 9: SUPERCHARGE LOST always; 8: release = no button while the player drives; 7: debug message ids moved to free ids; 6: autopilot boost start refused; 3: per-mode switches, per-action fill factors, label/hint switches; 4: BTN hook;
                          # 5: button read from the pad, checked every frame
 
 # (name, offset in G_TUNE block, type, default, help)
@@ -171,8 +171,10 @@ G_DESIGN = 0xE0  # w,h,x0,dx,y,aw,ah,n (32 bytes, 0xE0..0x100)
 # (like PERFECT START / RACE TIME UP / medals), clear = the second slot used by takedowns, awards, Took-1st...
 # The supercharge messages use slot 0 so a takedown sign (slot 1, higher id = higher priority) no longer
 # interrupts and overdraws them; the BURNOUT messages stay with the awards in slot 1.
+# Bit1 picks the text colour (FUN_00170e78, $s7): set = the normal colour, clear = the red of the game's negative
+# messages (BadSlam/BadShunt/BadNudge/BadSideswipe all have it clear). SUPERCHARGE LOST keeps bit0 (its slot).
 NEW_MESSAGES = [("BlueBoostAvailable", 0x74, 0x03, 0x02), ("Burnout", 0x75, 0x02, 0x03),
-                ("BurnoutLost", 0x76, 0x03, 0xFF), ("BurnoutDomination", 0x77, 0x02, 0x04),
+                ("BurnoutLost", 0x76, 0x01, 0xFF), ("BurnoutDomination", 0x77, 0x02, 0x04),
                 ("BurnoutWow", 0x78, 0x02, 0x04),
                 ("DebugBoostPad", 0x79, 0x03, 0x02), ("DebugBoostAuto", 0xA7, 0x03, 0x02),
                 ("DebugBoostTap", 0xA8, 0x03, 0x02), ("DebugBoostBlock", 0xA9, 0x03, 0x02)]
@@ -181,6 +183,14 @@ NEW_MESSAGES = [("BlueBoostAvailable", 0x74, 0x03, 0x02), ("Burnout", 0x75, 0x02
 FREE_MSG_IDS = (0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0xA7, 0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF)
 REFUSED_MSG_IDS = (set(range(1, 7)) | set(range(0x66, 0x6B)) | {0xB7} | set(range(0xBD, 0xC1))
                    | set(range(0xC5, 0xC8)) | set(range(0xE3, 0xEC)))
+# Entry byte 2 = sign style: FUN_00170e78 draws HUD texture [style] next to the text (unless 0x25): 0 AgressiveNeg
+# (the red diamond road sign of the game's negative messages, style of every Bad* entry), 1 AgressivePos.
+MSG_STYLE_POS, MSG_STYLE_NEG = 0x01, 0x00
+MSG_RED_BIT = 0x02
+def msg_style(mid):
+    return MSG_STYLE_NEG if mid == M_LOST else MSG_STYLE_POS
+
+
 HUD_SEGS = 0x6DE         # boost-bar HUD element + 0x6FE (displayed segments), relative to the draw context (+0x20)
 M_SUPER, M_BURNOUT, M_LOST, M_DOMI, M_WOW, M_DBGPAD, M_DBGAUTO = 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0xA7
 M_DBGTAP, M_DBGBLOCK = 0xA8, 0xA9
@@ -322,7 +332,7 @@ def build_data(lay, old_table, tunables=None):
     assert len(old_table) == 12 * a["MSG_COUNT"]
     t = bytearray(old_table)
     for name, mid, b1, lvl in NEW_MESSAGES:
-        t += struct.pack("<3I", mid | (b1 << 8) | (0x01 << 16) | (lvl << 24), name_ptr[name], 0)
+        t += struct.pack("<3I", mid | (b1 << 8) | (msg_style(mid) << 16) | (lvl << 24), name_ptr[name], 0)
     d[lay.msgtab - R:lay.msgtab - R + len(t)] = t
     return bytes(d)
 
