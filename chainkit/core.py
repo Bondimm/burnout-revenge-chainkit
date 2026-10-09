@@ -87,7 +87,7 @@ class Disc:
             self.crc = crc(self.elf)
             if self.crc != self.region["crc"]:
                 raise KitError("the game executable was changed by another tool (CRC %08X); ChainKit needs it as "
-                               "on the disc or as MusicKit / CarKit leave it" % self.crc)
+                               "on the disc or as MusicKit leaves it" % self.crc)
             self.applied = elfpatch.is_applied(self.elf)
             self.version = elfpatch.version(self.elf)
             self.values = None
@@ -128,7 +128,7 @@ class Disc:
 
     def summary(self):
         s = "Burnout Revenge %s" % self.region["short"] + (" with the Burnout Chain mod" if self.applied else "")
-        extra = [k for k, on in (("MusicKit songs (%d)" % self.songs, self.musickit), ("CarKit cars", self.carkit))
+        extra = [k for k, on in (("MusicKit songs (%d)" % self.songs, self.musickit), ("changed cars", self.carkit))
                  if on]
         return s + (" + " + ", ".join(extra) if extra else "")
 

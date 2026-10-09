@@ -19,7 +19,7 @@ set built in — and lets you tune every part of it.
 - **Every rule is a setting** — per game mode, per driving action, colours, pop-ups, sounds — with presets
   (*Default (tested)*, *Dominator rules*, *Easy*, *Hard*). Open an image ChainKit made to change its settings
   later, without starting over.
-- Works together with **MusicKit** (run MusicKit first) and **CarKit** images.
+- Works together with **MusicKit** (run MusicKit first).
 - The new image keeps the game's PCSX2 CRC (`7E83CC5B` Europe, `D224D348` USA), so **PCSX2 still recognises the
   game and applies its patches** (widescreen etc.).
 - **Tested in PCSX2** with the default settings on the European version (races, Road Rage, Burning Lap). The USA
@@ -48,7 +48,7 @@ set built in — and lets you tune every part of it.
 
 ### Step 1 — Select your Burnout Revenge ISO
 Click **Browse…** (or drop the `.iso` on the window). ChainKit tells you what is on it: the original game,
-MusicKit songs, CarKit cars — or the Burnout Chain mod itself (then its settings are loaded, see
+MusicKit songs — or the Burnout Chain mod itself (then its settings are loaded, see
 [Change the settings later](#change-the-settings-later)).
 
 ### Step 2 — Arrow art (optional)
@@ -110,7 +110,7 @@ game's unused online voice-chat icon in memory (the ISO version replaces it in t
 4. **Boot the game** (or restart it): the cheat is written once when the game starts.
 
 Notes: use your ISO **without** ChainKit (never the cheat together with a ChainKit ISO - ChainKit refuses to make a
-cheat from such an ISO). MusicKit / CarKit ISOs are fine. Other cheats: `pnach-check` (or `pnach --check-with`)
+cheat from such an ISO). MusicKit ISOs are fine. Other cheats: `pnach-check` (or `pnach --check-with`)
 lists memory both write - none with Nehalem's Single Event Mod. Other versions of the game (Japan, other
 executables) are not supported.
 
@@ -284,18 +284,16 @@ Settings are applied in this order: the preset (or, for `tune`, the image's own 
 `--set`. `build` and `tune` check the new image right away (`--no-validate` skips that).
 
 `validate` re-reads the new image and checks it: the executable patch is complete and does not touch MusicKit /
-CarKit / PCSX2-patch addresses, the PCSX2 CRC is unchanged, the new texts and the arrow texture are in place,
+PCSX2-patch addresses, the PCSX2 CRC is unchanged, the new texts and the arrow texture are in place,
 MusicKit songs are kept, and every other file is byte-identical to your ISO.
 
-## Works with MusicKit and CarKit
+## Works with MusicKit
 
 - **MusicKit:** run [MusicKit](https://github.com/Bondimm/burnout-revenge-musickit) **first**, then ChainKit on
   MusicKit's new image. ChainKit uses the top of the free space that MusicKit opens for its song list; both fit.
   MusicKit cannot open an image that already has ChainKit — if you want both, start again from your ISO without
   ChainKit (your ChainKit settings: **Save…** them first, then **Load…** them again). ChainKit shows a clear
   message if an image has a song list broken by a tool run after ChainKit.
-- **CarKit:** images made with CarKit work in any order — ChainKit and CarKit change different parts of the game.
-
 ## FAQ
 
 **PCSX2 says the dump is not in the redump database / the MD5 is red.** That is expected for *any* modified disc
