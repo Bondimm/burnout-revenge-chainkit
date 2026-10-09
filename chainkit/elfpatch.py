@@ -128,13 +128,13 @@ def build(lay=None, tunables=None, old_table=None):
     return lay, code, labels, data
 
 
-def patch(data, tunables=None):
+def patch(data, tunables=None, inline_texts=False):
     """Return (patched ELF bytes, report dict). `data` = the PAL or USA executable (original, CarKit and/or
-    MusicKit output)."""
+    MusicKit output). inline_texts: the pop-up texts come from the cave (used for the PCSX2 cheat)."""
     if is_applied(data):
         raise ChainError("the Burnout Chain patch is already applied (use 'tune' to change settings)")
     target = crc(data)
-    lay = layout(data)
+    lay = cave.Layout(region_of(data), inline_texts)
     A = lay.a
     e = Elf(data)
     ph = _segs(e)
@@ -159,6 +159,10 @@ def patch(data, tunables=None):
     ne.d[o:o + len(region)] = region
     o = ne.file_offset(lay.code)
     ne.d[o:o + len(code)] = code
+    if lay.inline:
+        t = cave.build_texts(lay)
+        o = ne.file_offset(lay.texts)
+        ne.d[o:o + len(t)] = t
     hk = cave.hooks(lay, labels)
     for va, old, new, what in hk:
         ne.w32(va, new)

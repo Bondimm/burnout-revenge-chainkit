@@ -2,6 +2,11 @@
 
   build    --iso SRC.iso [--out NEW.iso] [--dominator DOMINATOR.iso] [--preset NAME] [--settings FILE.json]
            [--set NAME=VALUE ...]                         new ISO with the mod (your ISO is only read)
+           [--output-type pnach --out-dir DIR]            ... or a PCSX2 cheat instead (same as 'pnach')
+  pnach    --iso SRC.iso [--iso OTHER.iso] [--out-dir DIR] [--region pal|usa|both] [--force]
+           [--check-with OTHER.pnach ...] [--preset/--settings/--set]
+                                                          PCSX2 cheat <SERIAL>_<CRC>_chainkit.pnach (no disc change)
+  pnach-check FILE.pnach --with OTHER.pnach ...          addresses two cheats both write
   tune     SRC.iso NEW.iso [--preset/--settings/--set] [--dominator ...]
                                                           new ISO = an ISO that has the mod, with other settings
   validate SRC.iso NEW.iso [--dominator DOMINATOR.iso] [--quick]
@@ -82,6 +87,22 @@ def main(argv=None):
     p = sub.add_parser("build", help="new ISO with the mod")
     p.add_argument("--iso", required=True); p.add_argument("--out"); _value_args(p)
     p.add_argument("--no-validate", action="store_true")
+    p.add_argument("--output-type", choices=("iso", "pnach"), default="iso",
+                   help="iso = new disc image (default), pnach = PCSX2 cheat file")
+    p.add_argument("--out-dir", help="folder for the cheat file (pnach; default: the ChainKit folder)")
+    p.add_argument("--force", action="store_true", help="replace an existing cheat file")
+    p.add_argument("--check-with", action="append", default=[], metavar="OTHER.pnach")
+    p = sub.add_parser("pnach", help="PCSX2 cheat (.pnach) instead of a new ISO")
+    p.add_argument("--iso", action="append", required=True, help="your ISO (Europe and/or USA; give it twice)")
+    p.add_argument("--out-dir", help="folder for the cheat file(s) (default: the ChainKit folder)")
+    p.add_argument("--region", choices=("pal", "usa", "both"), default="both",
+                   help="which of the given ISOs to make a cheat for")
+    p.add_argument("--force", action="store_true", help="replace an existing cheat file")
+    p.add_argument("--check-with", action="append", default=[], metavar="OTHER.pnach",
+                   help="another cheat for the same game: refuse if both write the same memory")
+    _value_args(p)
+    p = sub.add_parser("pnach-check", help="addresses written by two cheats")
+    p.add_argument("pnach"); p.add_argument("--with", dest="others", action="append", required=True)
     p = sub.add_parser("tune", help="change the settings of an ISO that has the mod (writes a new ISO)")
     p.add_argument("source"); p.add_argument("output"); _value_args(p)
     p.add_argument("--no-validate", action="store_true")
@@ -115,6 +136,36 @@ def _run(a, ap):
                 demo = json.load(f)
         size = tuple(int(x) for x in a.size.lower().split("x")) if a.size else None
         return gui.main(a.shot, demo, size)
+    if a.cmd == "build" and a.output_type == "pnach":
+        a.iso, a.region = [a.iso], "both"
+        a.cmd = "pnach"
+    if a.cmd == "pnach":
+        values = _values(a, settings.DEFAULTS)
+        out_dir = a.out_dir or core.KIT_DIR
+        made = 0
+        for iso_path in a.iso:
+            path, region = core.pnach_target(iso_path, out_dir)
+            if a.region != "both" and region["key"].lower() != a.region:
+                print("skipped %s (%s, not %s)" % (iso_path, region["key"], a.region.upper()))
+                continue
+            core.build_pnach(iso_path, out_dir, values, force=a.force, check_with=a.check_with)
+            made += 1
+        if not made:
+            raise core.KitError("no ISO of the chosen region given")
+        print("Copy the file(s) into PCSX2's cheats folder, enable cheats and tick 'Burnout Chain (ChainKit)', then "
+              "boot the game.")
+        return 0
+    if a.cmd == "pnach-check":
+        from . import pnach
+        mine = open(a.pnach, encoding="utf-8", errors="replace").read()
+        bad = 0
+        for other in a.others:
+            hits = pnach.overlaps(mine, open(other, encoding="utf-8", errors="replace").read())
+            print("%s: %s" % (other, "no overlap" if not hits else "%d overlapping write(s)" % len(hits)))
+            for (a0, a1), sec, (b0, b1) in hits[:10]:
+                print("  %#x-%#x  also written by [%s] %#x-%#x" % (a0, a1, sec, b0, b1))
+            bad += bool(hits)
+        return 1 if bad else 0
     if a.cmd == "build":
         out = a.out or core.default_output(a.iso)
         values = _values(a, settings.DEFAULTS)

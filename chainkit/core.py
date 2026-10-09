@@ -326,3 +326,68 @@ def validate(src, out, dominator=None, log=print, quick=False):
             o.close()
     log("RESULT: %s" % ("OK" if ok else "FAILED"))
     return ok
+
+
+# ------------------------------------------------------------------------------------------- PCSX2 cheat output
+KIT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def pcsx2_cheats_dirs():
+    """PCSX2 cheats folders that exist on this computer (a suggestion only - ChainKit never writes there by itself)."""
+    import sys
+    home = os.path.expanduser("~")
+    cands = []
+    if sys.platform == "win32":
+        docs = os.path.join(os.environ.get("USERPROFILE") or home, "Documents")
+        cands += [os.path.join(docs, "PCSX2", "cheats")]
+        for base in (os.environ.get("ProgramFiles", ""), os.environ.get("LOCALAPPDATA", "")):
+            if base:
+                cands.append(os.path.join(base, "PCSX2", "cheats"))
+    elif sys.platform == "darwin":
+        cands.append(os.path.join(home, "Library", "Application Support", "PCSX2", "cheats"))
+    else:
+        cands.append(os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.join(home, ".config"), "PCSX2", "cheats"))
+        cands.append(os.path.join(home, ".var", "app", "net.pcsx2.PCSX2", "config", "PCSX2", "cheats"))
+    return [c for c in cands if os.path.isdir(c)]
+
+
+def pnach_target(src, out_dir):
+    """(path, region) of the cheat file that would be written for this ISO."""
+    from . import pnach
+    with Disc(src) as d:
+        region = d.region
+    return os.path.join(out_dir, pnach.file_name(region)), region
+
+
+def build_pnach(src, out_dir, values=None, force=False, check_with=(), log=print):
+    """Write the PCSX2 cheat for the game on `src` (an ISO without the mod) into out_dir. Returns the path."""
+    from . import pnach
+    if not out_dir or not os.path.isdir(out_dir):
+        raise KitError("folder not found: %s" % out_dir)
+    values = settings.check(values)
+    with Disc(src) as d:
+        for p in d.problems():
+            raise KitError(p)
+        if d.applied:
+            raise KitError("this ISO already has the Burnout Chain mod - make the cheat from your ISO without the "
+                           "mod (and do not use the cheat together with a ChainKit ISO)")
+        log("source: %s (%s)" % (os.path.basename(src), d.summary()))
+        try:
+            text, region = pnach.render(d.elf, values, settings.preset_of(values))
+        except elfpatch.ChainError as exc:
+            raise KitError(str(exc))
+    path = os.path.join(out_dir, pnach.file_name(region))
+    if os.path.exists(path) and not force:
+        raise KitError("%s exists already - choose to replace it (--force) or another folder" % path)
+    for other in check_with or ():
+        with open(other, encoding="utf-8", errors="replace") as f:
+            hits = pnach.overlaps(text, f.read())
+        log("overlap check with %s: %s" % (os.path.basename(other), "none" if not hits else
+                                           "%d address(es) also written there, e.g. %#x" % (len(hits), hits[0][0][0])))
+        if hits:
+            raise KitError("the cheat would write memory that %s also writes" % os.path.basename(other))
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(text)
+    n = text.count("\npatch=")
+    log("PCSX2 cheat: %s (%d memory writes, arrows: Revenge's chevron, English pop-up texts)" % (path, n))
+    return path

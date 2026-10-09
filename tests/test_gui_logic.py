@@ -123,3 +123,37 @@ def test_app_dir_per_platform(monkeypatch, tmp_path):
     else:
         assert d == str(tmp_path / "xdg" / "chainkit")
     assert os.path.isdir(d)
+
+
+def test_pnach_output_choice(g, tmp_path):
+    from chainkit import core, regions
+    d = gui.ChainKitGui(g.log, {"demo": {"disc": {
+        "path": "Burnout Revenge (Europe).iso", "summary": "Burnout Revenge Europe", "applied": False,
+        "values": None, "problems": [], "arrow_art": None, "musickit": False, "carkit": False, "songs": 41,
+        "crc": 0x7E83CC5B, "langs": ["UK"], "region": regions.PAL}}})
+    assert d.output_type == "iso" and d.pnach_dir == core.KIT_DIR
+    d.output_type = "pnach"
+    d.set_pnach_dir(str(tmp_path / "missing"))
+    assert "folder" in d.save_problem()
+    d.set_pnach_dir(str(tmp_path))
+    assert d.save_problem() is None and d.pnach_path().endswith("SLES-53507_7E83CC5B_chainkit.pnach")
+    open(d.pnach_path(), "w").write("[Single Event Mod]\n")
+    assert "Replace it" in d.save_problem()                          # never overwrite without asking
+    d.pnach_replace = True
+    assert d.save_problem() is None
+    d.disc.applied = True
+    assert "without the mod" in d.save_problem()
+    d.save_settings()
+    saved = json.load(open(os.path.join(gui.app_dir(), "settings.json"), encoding="utf-8"))
+    assert saved["output_type"] == "pnach" and saved["pnach_dir"] == str(tmp_path)
+
+
+def test_pnach_check_command(tmp_path, capsys):
+    from chainkit import cli
+    a, b = tmp_path / "a.pnach", tmp_path / "b.pnach"
+    a.write_text("[X]\npatch=0,EE,204A5000,extended,00000001\n")
+    b.write_text("[Y]\npatch=0,EE,200B5000,extended,00000001\n")
+    assert cli.main(["pnach-check", str(a), "--with", str(b)]) == 0
+    b.write_text("[Y]\npatch=0,EE,204A5000,extended,00000002\n")
+    assert cli.main(["pnach-check", str(a), "--with", str(b)]) == 1
+    assert "also written by [Y]" in capsys.readouterr().out

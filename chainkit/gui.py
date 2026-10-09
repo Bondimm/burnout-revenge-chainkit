@@ -108,7 +108,7 @@ def disc_info(path):
     with core.Disc(path) as d:
         return SimpleNamespace(path=path, summary=d.summary(), applied=d.applied, values=d.values,
                                problems=d.problems(), arrow_art=d.arrow_art, musickit=d.musickit, carkit=d.carkit,
-                               songs=d.songs, crc=d.crc, langs=d.langs)
+                               songs=d.songs, crc=d.crc, langs=d.langs, region=d.region)
 
 
 class ChainKitGui:
@@ -120,6 +120,9 @@ class ChainKitGui:
         self.iso_path = self.saved.get("iso") or ""
         self.dom_path = self.saved.get("dominator") or ""
         self.out_path = self.saved.get("out") or ""
+        self.output_type = self.saved.get("output_type") if self.saved.get("output_type") in ("iso", "pnach") else "iso"
+        self.pnach_dir = self.saved.get("pnach_dir") or core.KIT_DIR
+        self.pnach_replace = False
         try:
             self.values = settings.check(self.saved.get("values") or {})
         except ValueError:
@@ -152,6 +155,7 @@ class ChainKitGui:
     # ------------------------------------------------------------------ state
     def save_settings(self):
         self.saved.update({"iso": self.iso_path, "dominator": self.dom_path, "out": self.out_path,
+                           "output_type": self.output_type, "pnach_dir": self.pnach_dir,
                            "values": settings.to_json(self.values)["settings"],
                            "open_groups": sorted(self.open_groups)})
         self.saved.pop("demo", None)
@@ -180,14 +184,31 @@ class ChainKitGui:
         """A Dominator ISO is chosen and the selected modded ISO still uses Revenge's chevron."""
         return bool(self.dom_ok and self.disc and self.disc.applied and self.disc.arrow_art != "dominator")
 
+    def pnach_path(self):
+        """Path of the cheat file for the selected ISO (None without an ISO)."""
+        if self.disc is None:
+            return None
+        from . import pnach, regions
+        region = getattr(self.disc, "region", None) or regions.PAL
+        return os.path.join(self.pnach_dir or "", pnach.file_name(region))
+
     def save_problem(self):
-        """Why "Save new ISO" cannot be pressed now (None when it can)."""
+        """Why "Save" cannot be pressed now (None when it can)."""
         if self.busy():
             return "wait until '%s' has finished" % self.job.title
         if self.disc is None:
             return "select your Burnout Revenge ISO first"
         if self.disc.problems:
             return self.disc.problems[0]
+        if self.output_type == "pnach":
+            if self.disc.applied:
+                return "this ISO already has the mod - for a PCSX2 cheat select your ISO without the mod"
+            if not os.path.isdir(self.pnach_dir or ""):
+                return "choose the folder for the cheat file"
+            if os.path.exists(self.pnach_path()) and not self.pnach_replace:
+                return "%s exists in that folder: tick 'Replace it' or choose another folder" % \
+                    os.path.basename(self.pnach_path())
+            return None
         if self.dom_path and not self.dom_ok:
             return "the Burnout Dominator ISO cannot be used (%s) - clear it to use Revenge's chevron" % (
                 self.dom_error or "not checked yet")
@@ -368,6 +389,36 @@ class ChainKitGui:
 
         self.start_job("save new ISO", run)
 
+    def build_pnach(self):
+        problem = self.save_problem()
+        if problem:
+            self.log.error(problem[0].upper() + problem[1:])
+            return
+        src, out_dir, values = self.disc.path, self.pnach_dir, dict(self.values)
+
+        def run(job):
+            job.update(0.3, "writing the PCSX2 cheat")
+            path = core.build_pnach(src, out_dir, values, force=True, log=self.log)
+            self.last_save = {"out": path, "ok": True, "values": values, "pnach": True}
+            self.pnach_replace = False
+            self.log("Done. In PCSX2: Settings > Emulation > enable cheats (or the game's Properties > Cheats), "
+                     "tick 'Burnout Chain (ChainKit)' and start the game. The file must be in PCSX2's cheats folder.")
+            return path
+
+        self.start_job("save PCSX2 cheat", run)
+
+    def save(self):
+        (self.build_pnach if self.output_type == "pnach" else self.build)()
+
+    def pick_pnach_dir(self):
+        from imgui_bundle import portable_file_dialogs as pfd
+        self.open_dialog(pfd.select_folder("Folder for the PCSX2 cheat file", self.pnach_dir or ""),
+                         lambda r: r and self.set_pnach_dir(r))
+
+    def set_pnach_dir(self, path):
+        self.pnach_dir = path
+        self.pnach_replace = False
+
     def open_saved(self):
         if self.last_save:
             self.load_disc(self.last_save["out"])
@@ -492,7 +543,10 @@ class ChainKitGui:
         if imgui.button("Clear##dom"):
             self.set_dominator("")
         imgui.end_disabled()
-        if self.dom_ok:
+        if self.output_type == "pnach":
+            U.text(GREY, "Not used for a PCSX2 cheat (a cheat cannot change disc files): the arrows use Revenge's "
+                         "own chevron.")
+        elif self.dom_ok:
             U.text(GREEN, "Dominator's arrow will be used.")
         elif self.dom_path and self.dom_error:
             U.text(RED, "! " + self.dom_error)
@@ -504,22 +558,55 @@ class ChainKitGui:
                 U.text(GREY, "Without it the arrows use Revenge's own chevron. ChainKit includes no game data: the "
                              "arrow image is taken from your own Burnout Dominator disc image.")
         # ---- 3
-        U.step(3, "Save the new ISO", bool(self.last_save and self.last_save["ok"]))
+        U.step(3, "Save", bool(self.last_save and self.last_save["ok"]))
         imgui.begin_disabled(busy)
-        imgui.set_next_item_width(-U.bw("Browse..."))
-        _, self.out_path = imgui.input_text("##out", self.out_path)
+        if imgui.radio_button("Mod the ISO (new disc image)", self.output_type == "iso"):
+            self.output_type = "iso"
+        U.tip("Writes a new ISO with the mod: PCSX2 or a real PS2, Dominator's arrow art, texts in every language "
+              "of your disc. Your ISO is never changed.")
         imgui.same_line()
-        if imgui.button("Browse...##out"):
-            self.pick_out()
+        if imgui.radio_button("PCSX2 cheat (.pnach)", self.output_type == "pnach"):
+            self.output_type = "pnach"
+        U.tip("Writes a small cheat file for PCSX2 instead: no new ISO, switch it on or off in PCSX2's cheat list. "
+              "PCSX2 only (not a real PS2), Revenge's chevron arrows, English pop-ups.")
+        if self.output_type == "iso":
+            imgui.set_next_item_width(-U.bw("Browse..."))
+            _, self.out_path = imgui.input_text("##out", self.out_path)
+            imgui.same_line()
+            if imgui.button("Browse...##out"):
+                self.pick_out()
+        else:
+            imgui.set_next_item_width(-U.bw("Browse..."))
+            changed, v = imgui.input_text("##pnachdir", self.pnach_dir)
+            if changed:
+                self.set_pnach_dir(v)
+            imgui.same_line()
+            if imgui.button("Browse...##pnach"):
+                self.pick_pnach_dir()
+            for d in core.pcsx2_cheats_dirs():
+                if os.path.abspath(d) != os.path.abspath(self.pnach_dir or ""):
+                    if imgui.button("Use PCSX2 cheats folder##%s" % d):
+                        self.set_pnach_dir(d)
+                    U.tip(d)
+                    break
+            target = self.pnach_path()
+            if target:
+                U.text(GREY, "File: %s (PCSX2 loads every %s*.pnach in its cheats folder, so other cheats for this "
+                             "game stay untouched)." % (os.path.basename(target),
+                                                       os.path.basename(target).replace("_chainkit.pnach", "")))
+                if os.path.exists(target):
+                    U.text(YELLOW, "This file exists already.")
+                    _, self.pnach_replace = imgui.checkbox("Replace it", self.pnach_replace)
         imgui.end_disabled()
-        if self.out_path and os.path.exists(self.out_path) and self.disc and \
+        if self.output_type == "iso" and self.out_path and os.path.exists(self.out_path) and self.disc and \
                 os.path.abspath(self.out_path) != os.path.abspath(self.disc.path):
             U.text(YELLOW, "This file exists and will be replaced.")
         problem = self.save_problem()
         imgui.begin_disabled(problem is not None)
         imgui.push_style_color(imgui.Col_.button, U.col((0.1, 0.45, 0.75, 1.0)))
-        if imgui.button("Save new ISO", imgui.ImVec2(U.bw("  Save new ISO  "), imgui.get_frame_height() * 1.6)):
-            self.build()
+        label = "Save new ISO" if self.output_type == "iso" else "Save PCSX2 cheat"
+        if imgui.button(label, imgui.ImVec2(U.bw("  Save PCSX2 cheat  "), imgui.get_frame_height() * 1.6)):
+            self.save()
         imgui.pop_style_color()
         imgui.end_disabled()
         if problem:
@@ -530,11 +617,13 @@ class ChainKitGui:
             n = len(self.changed_settings())
             U.text(GREY, "%d setting%s changed%s" % (n, "" if n == 1 else "s",
                                                     ", adds Dominator's arrow" if self.adds_arrow() else ""))
-        if self.job and (not self.job.done or self.job.title == "save new ISO"):
+        if self.job and (not self.job.done or self.job.title in ("save new ISO", "save PCSX2 cheat")):
             imgui.progress_bar(self.job.progress if not self.job.done else 1.0, imgui.ImVec2(-1, 0),
                                self.job.message if not self.job.done else ("done" if self.job.ok else "failed"))
         if self.last_save and not busy:
-            if self.last_save["ok"]:
+            if self.last_save["ok"] and self.last_save.get("pnach"):
+                U.text(GREEN, "Saved: %s" % self.last_save["out"])
+            elif self.last_save["ok"]:
                 U.text(GREEN, "Saved and checked: %s" % self.last_save["out"])
                 if imgui.button("Open the new ISO here (to change its settings)"):
                     self.open_saved()
@@ -722,7 +811,7 @@ def main(shot=None, demo=None, size=None):
     except Exception:
         saved = {}
     if demo:
-        saved = {"demo": demo, **{k: demo[k] for k in ("iso", "dominator", "out", "values", "open_groups")
+        saved = {"demo": demo, **{k: demo[k] for k in ("iso", "dominator", "out", "values", "open_groups", "output_type", "pnach_dir")
                                   if k in demo}}
     log = Log(os.path.join(app_dir(), "gui.log"))
     try:

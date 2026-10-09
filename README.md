@@ -61,12 +61,49 @@ fill*, *Arrows* and *Display and sound*. Hover over any setting for an explanati
 settings turn orange. Start from a preset and change single settings if you like. See the
 [settings guide](#settings-guide).
 
-### Step 4 — Save the new ISO
-Choose where to save it and click **Save new ISO**. ChainKit writes the new image and then **checks** it: every file
+### Step 4 — Save: new ISO or PCSX2 cheat
+Choose what to make (see [ISO or PCSX2 cheat?](#iso-or-pcsx2-cheat)):
+
+- **Mod the ISO** — choose where to save it and click **Save new ISO**.
+- **PCSX2 cheat (.pnach)** — choose a folder (the ChainKit folder by default; **Use PCSX2 cheats folder** appears
+  when ChainKit finds one) and click **Save PCSX2 cheat**. See [Install the cheat](#install-the-pcsx2-cheat).
+
+For the new ISO: ChainKit writes the new image and then **checks** it: every file
 it did not change is compared with your ISO byte by byte, the PCSX2 CRC, the new texts and the arrow texture are
 verified. The log shows the result (*RESULT: OK*). Load the new `.iso` in PCSX2 or burn it for your PS2.
 
 ![Saved and checked](docs/images/chainkit_saved.png)
+
+## ISO or PCSX2 cheat?
+
+| | Mod the ISO | PCSX2 cheat (.pnach) |
+|---|---|---|
+| Plays on | PCSX2 **and** a real PS2 (burned disc / OPL) | PCSX2 only |
+| Your game files | a new `.iso` next to yours (~4 GB) | none changed - a ~100 KB text file |
+| Switch the mod off | play your original ISO | untick it in PCSX2's cheat list (takes effect at the next boot) |
+| Arrow art | Dominator's arrow from your Dominator disc (optional) | Revenge's own chevron (a cheat cannot change disc files) |
+| Pop-up texts | in every language of your disc | English |
+| Settings | all | all (same code, same settings) |
+
+Both are the same mod: the cheat writes exactly the memory the modded ISO has (checked by the tests), only the
+arrow texture and the source of the pop-up texts differ.
+
+### Install the PCSX2 cheat
+1. Save the cheat with ChainKit (window: **PCSX2 cheat (.pnach)**; command line: `pnach --iso "Burnout Revenge.iso"`).
+   The file is called `SLES-53507_7E83CC5B_chainkit.pnach` (Europe) or `SLUS-21242_D224D348_chainkit.pnach` (USA).
+   PCSX2 loads **every** `<serial>_<CRC>*.pnach` in its cheats folder, so other cheats for the game (e.g. a
+   `SLES-53507_7E83CC5B.pnach`) are not replaced.
+2. Put it into PCSX2's **cheats** folder (or save it there directly): Windows `Documents\PCSX2\cheats` (portable
+   installs: `cheats` next to `pcsx2-qt.exe`), macOS `~/Library/Application Support/PCSX2/cheats`, Linux
+   `~/.config/PCSX2/cheats`.
+3. In PCSX2: right-click the game → **Properties → Cheats**, tick **Burnout Chain (ChainKit)** (and **Enable
+   Cheats** if PCSX2 asks).
+4. **Boot the game** (or restart it): the cheat is written once when the game starts.
+
+Notes: use your ISO **without** ChainKit (never the cheat together with a ChainKit ISO - ChainKit refuses to make a
+cheat from such an ISO). MusicKit / CarKit ISOs are fine. Other cheats: `pnach-check` (or `pnach --check-with`)
+lists memory both write - none with Nehalem's Single Event Mod. Other versions of the game (Japan, other
+executables) are not supported.
 
 ### In the game
 Supercharge-boosting with the arrows lighting up over the bar. Every full refill is a **BURNOUT**, and the chain
@@ -229,6 +266,8 @@ in a terminal).
 | list the presets | `presets` |
 | save settings to a file | `export "Burnout Revenge (Burnout Chain).iso" my.json` · `export --preset Hard hard.json` |
 | check a new image | `validate "Burnout Revenge (Europe).iso" "Burnout Revenge (Burnout Chain).iso"` |
+| PCSX2 cheat instead of an ISO | `pnach --iso "Burnout Revenge (Europe).iso" --out-dir cheats` (`--force` replaces an existing file; give `--iso` twice for Europe + USA; `--region pal\|usa\|both`) · or `build --output-type pnach ...` |
+| other cheats writing the same memory? | `pnach-check SLES-53507_7E83CC5B_chainkit.pnach --with OTHER.pnach` (also `pnach ... --check-with OTHER.pnach`) |
 
 On/off settings have their own names, so no bit masks are needed: `--set only_boost_while_held=off`, `--set debug_boost=on`, `--set mode_traffic_attack=off` (`settings` lists every name).
 

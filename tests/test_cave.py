@@ -12,7 +12,8 @@ from chainkit.mips import Cpu, RI              # noqa: E402
 
 # The same suite runs for the USA build: tests/test_cave_usa.py loads this file with REGION_KEY = "USA".
 REGION = regions.BY_KEY[globals().get("REGION_KEY", "PAL")]
-LAY = cave.Layout(REGION)
+INLINE = globals().get("INLINE", False)       # PCSX2 cheat build: texts from the cave (test_cave_cheat.py)
+LAY = cave.Layout(REGION, INLINE)
 A = LAY.a
 T = LAY.t                                      # PAL address -> address in this build
 OTHER_RA = 0x2CE9B8                            # a return address that is no award call site (in both builds)
@@ -32,6 +33,8 @@ class Game:
         tun = {"flags": flags} if flags is not None else None
         m.write(A["REGION"], cave.build_data(LAY, bytes(12 * A["MSG_COUNT"]), tun))
         m.write(LAY.code, CODE)
+        if INLINE:
+            m.write(LAY.texts, cave.build_texts(LAY))
         for i, (s, mu) in enumerate(zip(SIZES, (1, 2, 3, 4))):
             m.wf32(A["TBL_SIZES"] + 4 * i, s); m.wf32(A["TBL_MULT"] + 4 * i, mu); m.wf32(A["TBL_RATE"] + 4 * i, 10)
         m.wf32(A["MINBOOST"], 1.0)
@@ -256,7 +259,8 @@ def test_burnout_chain_and_partial():
     g.cpu.m.w32(LAY.burnout_entry + 4, txt)
     g.empty()
     assert g.amt() == 400.0 and g.u(g.st(cave.S_CHAIN)) == 1 and "stop" not in g.names()
-    assert g.msgs() == [cave.M_BURNOUT] and g.u(LAY.burnout_entry + 8) == 0 and g.u(LAY.burnout_entry + 4) == txt
+    handle = LAY.text_addr[cave.M_BURNOUT] if INLINE else txt       # cheat build: its own "BURNOUT!" text
+    assert g.msgs() == [cave.M_BURNOUT] and g.u(LAY.burnout_entry + 8) == 0 and g.u(LAY.burnout_entry + 4) == handle
     g.calls.clear(); g.cpu.m.wf32(g.st(cave.S_ARROWS), 250.0); g.set_amt(0.0)
     g.empty()
     assert g.u(g.st(cave.S_CHAIN)) == 2 and g.u(LAY.burnout_entry + 8) == 0          # one line only

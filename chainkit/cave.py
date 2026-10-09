@@ -184,9 +184,20 @@ M_SUPER, M_BURNOUT, M_LOST, M_DOMI, M_WOW, M_DBGPAD, M_DBGAUTO = 0x74, 0x75, 0x7
 M_DBGTAP, M_DBGBLOCK = 0xA8, 0xA9
 
 
+# Region words the code changes while the game runs (offsets from REGION): a PCSX2 cheat must never rewrite them
+# every frame. The message table is filled once and then rewritten by the game itself (FUN_0016fcf8 turns the name
+# pointers into text handles), so a cheat writes it once only. Everything else in the hole is constant.
+RUNTIME_RANGES = [(STATE, STATE + 0x100), (G + G_ONLINE, G + G_MAGIC), (G + G_FSAVE, G + G_TUNE),
+                  (G + G_POS, G + G_UVS), (MSGBUF, ORIGP1 + 8), (LABELBUF, LABELBUF + 0x20), (SCORN, SCORN + 0x20),
+                  (BYPAD, CTRLT + 32)]
+# inline texts (PCSX2 cheat) sit at the very end of the hole, right after the code
+
+
 class Layout:
-    def __init__(self, region=regions.PAL):
+    def __init__(self, region=regions.PAL, inline_texts=False):
+        """inline_texts: the pop-up texts come from the cave itself (PCSX2 cheat: no MAIN*.BIN entries)."""
         self.region = region
+        self.inline = inline_texts
         self.a = a = addresses(region)
         R = a["REGION"]
         self.state, self.g, self.labelbuf, self.msgbuf = R + STATE, R + G, R + LABELBUF, R + MSGBUF
@@ -195,10 +206,42 @@ class Layout:
         assert self.msgtab + 12 * self.msg_count <= R + AWARD_TABLE      # (no overlap with the tables after it)
         assert CTRLT + 32 <= self.code - R
         self.burnout_entry = self.msgtab + 12 * (a["MSG_COUNT"] + 1)   # NEW_MESSAGES[1]
+        size = sum((2 * (len(inline_text(n)) + 1) + 3) & ~3 for n, _, _, _ in NEW_MESSAGES)
+        self.texts = (a["HOLE_END"] - size) & ~15
+        self.text_addr = {}
+        p = self.texts
+        for name, mid, _, _ in NEW_MESSAGES:
+            self.text_addr[mid] = p
+            p += (2 * (len(inline_text(name)) + 1) + 3) & ~3
+        assert p <= a["HOLE_END"]
+
+    def entry(self, mid):
+        """Address of the message table entry of one of our messages."""
+        k = [m for _, m, _, _ in NEW_MESSAGES].index(mid)
+        return self.msgtab + 12 * (self.a["MSG_COUNT"] + k)
+
+    def once_range(self):
+        return self.msgtab, self.msgtab + 12 * self.msg_count
 
     def t(self, pal_addr):
         """Address in this build of what is at `pal_addr` in the PAL build."""
         return regions.t(self.region, pal_addr)
+
+
+def inline_text(name):
+    """English pop-up text of one of our messages (PCSX2 cheat: no string-table entries)."""
+    from . import assets
+    return assets.TEXTS["BigMessage%sPart1" % name]["UK"]
+
+
+def build_texts(lay):
+    """UTF-16 texts at lay.texts (inline texts only)."""
+    out = bytearray()
+    for name, mid, _, _ in NEW_MESSAGES:
+        assert lay.texts + len(out) == lay.text_addr[mid]
+        b = (inline_text(name) + "\0").encode("utf-16-le")
+        out += b + b"\0" * (((len(b) + 3) & ~3) - len(b))
+    return bytes(out)
 
 
 def parse_colour(v):
@@ -331,10 +374,14 @@ class CaveAsm(Asm):
     def gfloat(self, freg, toff):
         self.mem("lwc1", freg, self.gaddr(G_TUNE + toff), "t0")
 
-    def send_msg(self, car, mid, param_reg=None):
-        """FUN_0016d668(hud(car), id, param, -1, 0, 0, -1) when popups are enabled."""
+    def send_msg(self, car, mid, param_reg=None, set_text=True):
+        """FUN_0016d668(hud(car), id, param, -1, 0, 0, -1) when popups are enabled. With inline texts (PCSX2
+        cheat) the message's text handle is set to our own UTF-16 text first (no second line)."""
         skip = self.L("nomsg")
         self.gflag(FL_MSG, skip)
+        if self.lay.inline and set_text:
+            self.la("t3", self.lay.text_addr[mid]); self.la("t4", self.lay.entry(mid))
+            self.sw("t3", 4, "t4"); self.sw("zero", 8, "t4")
         self.lw("t0", C_IDX, car)
         # t1 = idx * 0x2E8 (= 512+128+64+32+8)
         self.sll("t1", "t0", 9)
@@ -576,6 +623,9 @@ def build_code(lay):
     a.label("BM_burn")
     # one line: "BURNOUT!" (chain 1) or "<localized BURNOUT!> x<N>" written into our buffer; no second line
     a.la("t7", lay.burnout_entry + 8); a.sw("zero", 0, "t7")
+    if lay.inline:                                          # cheat: our own "BURNOUT!" text
+        a.la("t6", lay.text_addr[M_BURNOUT]); a.la("t3", lay.a["REGION"] + ORIGP1); a.sw("t6", 0, "t3")
+        a.la("t7", lay.burnout_entry + 4); a.b("BM_orig"); a.nop()
     a.la("t7", lay.burnout_entry + 4); a.lw("t6", 0, "t7"); a.la("t5", lay.msgbuf); a.beq("t6", "t5", "BM_orig"); a.nop()
     a.la("t3", lay.a["REGION"] + ORIGP1); a.sw("t6", 0, "t3")       # save the game's text handle
     a.label("BM_orig")
@@ -594,7 +644,7 @@ def build_code(lay):
     a.la("t7", lay.burnout_entry + 4); a.la("t6", lay.msgbuf); a.sw("t6", 0, "t7")
     a.label("BM_send")
     a.lw("t4", S_CHAIN, "s0")
-    a.send_msg("s1", M_BURNOUT, "t4")
+    a.send_msg("s1", M_BURNOUT, "t4", set_text=False)
     a.label("BM_snd")
     a.sound(A["SND_GAIN"])
     a.pop(0x20, REGS3); a.jr("ra"); a.nop()
@@ -1099,7 +1149,7 @@ def build_code(lay):
     a.pop(0x80, RH); a.jr("ra"); a.nop()
 
     code = a.assemble()
-    assert lay.code + len(code) <= A["HOLE_END"], "cave too large"
+    assert lay.code + len(code) <= lay.texts, "cave too large"
     return code, dict(a.labels)
 
 
