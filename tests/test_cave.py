@@ -381,17 +381,20 @@ def test_hud_label_tint_and_arrows():
     rect = 0x62000
     for k, x in enumerate((100.0, 400.0, 290.0, 28.0)):
         g.cpu.m.wf32(rect + 4 * k, x)
-    g.cpu.m.wf32(g.st(cave.S_ARROWS), 100.0)                # half of the pool -> 8 lit arrows
+    g.cpu.m.wf32(g.st(cave.S_ARROWS), 100.0)                # half of the pool -> 9 of 18 arrows lit
     g.run("HUDLBL", a0=rect, a1=4, s2=hud)
     lab = [c for c in g.calls if c[0] == "label"][0]
     assert lab[2] == 1                                   # bar-size label hidden (segment count 1)
     assert g.f(A["BARCOL"] + 16 * 3) == 3.0
-    assert g.names().count("quad") == 32
+    n = TUNE["arrow_count"]
+    assert g.names().count("quad") == 2 * n
     shadow, lit, dark = [tuple(round(x, 3) for x in TUNE[k]) for k in ("shadow_rgba", "lit_rgba", "dark_rgba")]
     cols = [tuple(round(x, 3) for x in q[0]) for q in g.quads]
-    assert cols[0::2] == [shadow] * 16 and cols[1::2] == [lit] * 8 + [dark] * 8
+    assert cols[0::2] == [shadow] * n and cols[1::2] == [lit] * (n // 2) + [dark] * (n - n // 2)
     xs = [q[1][0] for q in g.quads[1::2]]
-    assert xs[0] == pytest.approx(126.0) and xs[15] == pytest.approx(126 + 15 * 15.9)
+    # edge to edge: first / last arrow 'arrow_margin' from the bar's ends (arrow 13 units wide, bar 290)
+    m = TUNE["arrow_margin"]
+    assert xs[0] == pytest.approx(100 + m + 6.5, abs=1e-3) and xs[-1] == pytest.approx(100 + 290 - m - 6.5, abs=1e-3)
     g.calls.clear(); g.quads.clear(); g.cpu.m.w32(g.st(cave.S_CHAIN), 7)
     g.run("HUDLBL", a0=rect, a1=4, s2=hud)                  # chain running: still no label (pop-ups show it)
     lab = [c for c in g.calls if c[0] == "label"][0]
@@ -764,3 +767,20 @@ def test_cheat_arrow_texture_is_copied_before_drawing():
     g.cpu.stubs[A["SETTEX"]] = lambda cpu: seen.append(cpu.m.read(rec + cave.TEX_FROM, len(TEXBLOB)))
     g.run("HUDLBL", a0=0x62000, a1=4, s2=hud)
     assert seen == [TEXBLOB]
+
+
+def test_arrow_count_and_margin_settings():
+    g = supercharged(); g.boosting(True)
+    hud = 0x60000; g.cpu.m.w32(hud + cave.C_HUDCAR, CAR)
+    rect = 0x62000
+    for k, x in enumerate((0.0, 400.0, 580.0, 56.0)):                   # a bar drawn twice as large
+        g.cpu.m.wf32(rect + 4 * k, x)
+    g.cpu.m.w32(cave.tune_addr(LAY, "arrow_count")[0], 16)
+    g.cpu.m.wf32(cave.tune_addr(LAY, "arrow_margin")[0], 19.5)        # Revenge-like layout of v1-v17
+    g.cpu.m.wf32(g.st(cave.S_ARROWS), 200.0)
+    g.run("HUDLBL", a0=rect, a1=4, s2=hud)
+    xs = [q[1][0] for q in g.quads[1::2]]
+    assert len(xs) == 16 and xs[0] == pytest.approx(2 * 26.0, abs=1e-3) and xs[-1] == pytest.approx(2 * (290 - 26.0), abs=1e-3)
+    g.calls.clear(); g.quads.clear(); g.cpu.m.w32(cave.tune_addr(LAY, "arrow_count")[0], 99)
+    g.run("HUDLBL", a0=rect, a1=4, s2=hud)
+    assert len(g.quads) == 64                                         # capped at 32 arrows

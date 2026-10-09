@@ -34,7 +34,7 @@ set built in — and lets you tune every part of it.
 |---|---|
 | **Normal bar** | Driving skills fill your boost bar as in Revenge — near misses, oncoming, drifting, air, tailgating, slams … You can boost on it as usual. The bar is always the full 4 segments (Dominator); Revenge's *x2 – x4* label is hidden. |
 | **Supercharge** | A **full** bar becomes **supercharged**: it turns blue, *SUPERCHARGE READY!* pops up and a sound plays. A **takedown** supercharges it at once. |
-| **Arrows** | While you boost on a supercharged bar it drains 3× faster, and 16 **arrows** over the bar light up from everything in the skill list (near miss, oncoming, drift, air, checked traffic, tailgating, grinding, rubbing). A takedown lights all of them. |
+| **Arrows** | While you boost on a supercharged bar it drains 3× faster, and a row of **arrows** over the bar light up from everything in the skill list (near miss, oncoming, drift, air, checked traffic, tailgating, grinding, rubbing). A takedown lights all of them. |
 | **BURNOUT!** | When the supercharged bar runs empty it refills to half plus the lit arrows. All arrows lit = a full refill = a **BURNOUT**: the chain goes up (*BURNOUT! x2*, *x3* …, *BURNOUT DOMINATION!* at x10) and you keep boosting. |
 | **Partial refill** | Not all arrows lit: the bar refills to at most 80 % and the supercharge is lost (*SUPERCHARGE LOST*). |
 | **Losing it** | Letting go of the boost button, wrecking, a hit while you are not boosting, or boosting below 97 km/h (60 mph) for 3 seconds ends the supercharge and the chain. While you supercharge-boost, a hit never takes the bar below half, and the takedown camera does not count as letting go - but letting go once you drive again does (0.3 s to press boost again after the camera). |
@@ -52,7 +52,7 @@ MusicKit songs, CarKit cars — or the Burnout Chain mod itself (then its settin
 [Change the settings later](#change-the-settings-later)).
 
 ### Step 2 — Arrow art (optional)
-**You can skip this step.** It only changes how the 16 arrows look — the gameplay is the same. Without it the
+**You can skip this step.** It only changes how the arrows look — the gameplay is the same. Without it the
 arrows use **ChainKit's arrow** (below).
 
 ![ChainKit's arrow on the boost bar: lit and unlit](docs/images/chainkit_arrows.png)
@@ -186,7 +186,7 @@ an empty bar.
 | Takedown lights | 100 % of the arrows |
 
 ### Display and sound
-**Bar fire while the bar fills up** (off: the fire on the boost bar shows only while you really boost; Revenge also shows it while a refill is animated), **Debug: show stopped boosts** (pop-ups for testing), pop-up messages, sounds, the blue bar, the arrows (each can be switched off), **Show the x2 – x4 bar-size label**
+**Number of arrows** (18: the row fills the bar edge to edge) and **arrow row margin**, **Bar fire while the bar fills up** (off: the fire on the boost bar shows only while you really boost; Revenge also shows it while a refill is animated), **Debug: show stopped boosts** (pop-ups for testing), pop-up messages, sounds, the blue bar, the arrows (each can be switched off), **Show the x2 – x4 bar-size label**
 and **Show the PRESS R1 TO BOOST hint** (both hidden by default), and the colours of lit arrows, unlit arrows and
 their outline.
 

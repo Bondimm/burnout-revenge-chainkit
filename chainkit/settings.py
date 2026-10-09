@@ -155,7 +155,7 @@ GROUPS = [
              pct(0, 300)),
         Item("fill_w_crash_escape", "Crash escape", "Getting away after a near-crash.", pct(0, 300)),
     ]),
-    ("Arrows (while supercharge-boosting)", "The 16 arrows over the bar. The more are lit when the bar runs "
+    ("Arrows (while supercharge-boosting)", "The arrows over the bar. The more are lit when the bar runs "
                                             "empty, the more it refills; all lit = BURNOUT and the chain goes up.", [
         Item("arrow_gain", "All actions", "Speed for every action at once.", pct(25, 400)),
         Item("w_near_miss", "Near misses for all arrows", "How many near misses light all arrows.",
@@ -185,7 +185,7 @@ GROUPS = [
              "example a boost the game keeps going after a takedown or a Perfect Start) stops at once. Off: "
              "Revenge's own behaviour (a tap gives a short boost, a Perfect Start boosts on its own).", invert=True,
              cli="only_boost_while_held"),
-        flag("arrows", "Arrows", "Draw the 16 arrows over the bar. Off: no arrows are drawn and none are lit, "
+        flag("arrows", "Arrows", "Draw the arrows over the bar. Off: no arrows are drawn and none are lit, "
              "so every refill is partial."),
         flag("show_size_label", "Show the x2 - x4 bar-size label", "Revenge's label at the end of the bar. "
              "Hidden by default (the bar is always x4 and the label covered the arrows)."),
@@ -199,6 +199,11 @@ GROUPS = [
              "For testing: pop-ups name every boost the mod stops or refuses. BOOST STOP: TAP END = you let go "
              "(a tap ends at once); BOOST BLOCKED: GAME START = the game (takedown autopilot) tried to boost without "
              "your button; BOOST STOP: PAD / AUTO = a boost the button did not back was stopped."),
+        Item("arrow_count", "Number of arrows", "How many arrows are drawn over the bar. Only the look: the "
+             "share of the arrows each action lights stays the same. 18 fill the bar edge to edge.",
+             Unit(lambda r: r, lambda u: int(u), "%d", 8, 32)),
+        Item("arrow_margin", "Arrow row margin", "Space between the ends of the bar and the first / last arrow "
+             "(the bar is 290 units long).", Unit(lambda r: r, lambda u: u, "%.1f", 0, 40)),
         Item("lit_rgba", "Lit arrow colour", "Colour of a lit arrow (Dominator: cyan)."),
         Item("dark_rgba", "Unlit arrow colour", "Colour of an unlit arrow."),
         Item("shadow_rgba", "Arrow outline", "Dark outline drawn behind every arrow."),
@@ -257,7 +262,8 @@ LIMITS = dict(drain_mult=(0.1, 20.0), refill_cap=(0.01, 1.0), half=(0.01, 1.0), 
               slow_speed=(0.0, 150.0), slow_time=(0.0, 120.0), anim_time=(0.0, 10.0), takedown_grace=(0.0, 60.0),
               resuper_cooldown=(0.0, 60.0), full_hold_time=(0.0, 60.0), fill_mult=(0.0, 20.0),
               arrow_gain=(0.0, 20.0), arrows_takedown=(0.0, 1.0), domination_chain=(1, 9999),
-              wow_chain=(1, 9999), flags=(0, ALL_FLAGS), modes=(0, ALL_MODES), arrow_tex_slot=(12, 28))
+              wow_chain=(1, 9999), flags=(0, ALL_FLAGS), modes=(0, ALL_MODES), arrow_tex_slot=(12, 28),
+              arrow_count=(1, 32), arrow_margin=(0.0, 100.0))
 
 
 def check(values):

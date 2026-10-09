@@ -70,7 +70,7 @@ NAMES = 0xEF0            # message names (ASCII; after the mode table)
 SCORN = 0x3C0            # shadow quad corners (32 bytes)
 MSGTAB = 0x400           # relocated + extended message table
 MAGIC = b"CHAINKIT"
-VERSION = 9              # 9: SUPERCHARGE LOST always; 8: release = no button while the player drives; 7: debug message ids moved to free ids; 6: autopilot boost start refused; 3: per-mode switches, per-action fill factors, label/hint switches; 4: BTN hook;
+VERSION = 10             # 10: arrow count / margins (edge to edge); 9: SUPERCHARGE LOST always; 8: release = no button while the player drives; 7: debug message ids moved to free ids; 6: autopilot boost start refused; 3: per-mode switches, per-action fill factors, label/hint switches; 4: BTN hook;
                          # 5: button read from the pad, checked every frame
 
 # (name, offset in G_TUNE block, type, default, help)
@@ -101,6 +101,8 @@ TUNABLES = [
     ("arrows_slam", 0xE48 - G - G_TUNE, "f", 1.0 / 6, "arrows per SLAM while supercharge-boosting (fraction of the arrows)"),
     ("arrows_takedown", 0xE74 - G - G_TUNE, "f", 1.0, "arrows per TAKEDOWN while supercharged (fraction of the arrows)"),
     ("modes", 0xE70 - G - G_TUNE, "i", 0xFF, "modes with the mod (bits, see MODES); Crash mode and online are always vanilla"),
+    ("arrow_count", 0xE78 - G - G_TUNE, "i", 18, "number of arrows drawn over the bar (look only; 18 fill it edge to edge)"),
+    ("arrow_margin", 0xE7C - G - G_TUNE, "f", 2.0, "space between the bar's ends and the first / last arrow (bar design units of 290)"),
     ("full_hold_time", 0x2B8 - G - G_TUNE, "f", 0.0, "a bar that becomes full while boosting supercharges after this many seconds (0 = at once)"),
     ("resuper_cooldown", 0x2BC - G - G_TUNE, "f", 3.0, "no new supercharge for this many seconds after one was lost"),
     ("full_threshold", 0x2C0 - G - G_TUNE, "f", 0.98, "the bar counts as full from this fraction of max (boosting drains every frame after the award)"),
@@ -1123,10 +1125,15 @@ def build_code(lay):
         a.lw("t6", 0, "t3"); a.sw("t6", 0, "t4"); a.addiu("t3", "t3", 4); a.addiu("t5", "t5", -1)
         a.bnez("t5", "H_tcopy"); a.addiu("t4", "t4", 4)
     a.jal(A["SETTEX"]); a.nop()
-    # lit = arrows / (half * max) * 16
+    # n = arrow_count (1..32); lit = arrows / (half * max) * n
+    a.mem("lw", "t2", A["REGION"] + 0xE78, "t2")
+    a.slti("t1", "t2", 1); a.beqz("t1", "H_n1"); a.nop(); a.li("t2", 1)
+    a.label("H_n1")
+    a.slti("t1", "t2", 33); a.bnez("t1", "H_n2"); a.nop(); a.li("t2", 32)
+    a.label("H_n2")
     a.lwc1("f0", S_ARROWS, "s4"); a.lwc1("f1", B_MAX + C_BOOST, "s1"); a.gfloat("f2", 0x18); a.mul_s("f1", "f1", "f2")
     a.mtc1("zero", "f2"); a.nop(); a.c_lt_s("f2", "f1"); a.bc1f("H_ret"); a.nop()
-    a.div_s("f0", "f0", "f1"); a.mem("lwc1", "f1", a.gaddr(G_DESIGN + 28), "t9"); a.mul_s("f0", "f0", "f1")
+    a.div_s("f0", "f0", "f1"); a.mtc1("t2", "f1"); a.nop(); a.cvt_s_w("f1", "f1"); a.mul_s("f0", "f0", "f1")
     a.cvt_w_s("f0", "f0"); a.mfc1("s3", "f0")
     # scales
     a.la("s4", a.gaddr(0))                                   # s4 = globals base from here on
@@ -1144,10 +1151,22 @@ def build_code(lay):
     for k, (x, y) in enumerate((("f3", "f4"), ("f0", "f4"), ("f3", "f2"), ("f0", "f2"))):
         a.swc1(x, SC + 8 * k, "s4"); a.swc1(y, SC + 8 * k + 4, "s4")
     a.lwc1("f22", G_DESIGN + 16, "s4"); a.mul_s("f22", "f22", "f21"); a.lwc1("f1", 4, "s0"); a.add_s("f22", "f22", "f1")
+    # row layout, edge to edge: x0 = margin + aw/2, dx = (W - 2 margin - aw) / (n - 1) (design units; runtime scratch)
+    a.mem("lw", "t2", A["REGION"] + 0xE78, "t2")
+    a.slti("t1", "t2", 2); a.beqz("t1", "H_n3"); a.nop(); a.li("t2", 2)
+    a.label("H_n3")
+    a.slti("t1", "t2", 33); a.bnez("t1", "H_n4"); a.nop(); a.li("t2", 32)
+    a.label("H_n4")
+    a.addiu("t2", "t2", -1); a.mtc1("t2", "f2"); a.nop(); a.cvt_s_w("f2", "f2")               # n - 1
+    a.mem("lwc1", "f3", A["REGION"] + 0xE7C, "t1")                                          # margin
+    a.lwc1("f4", G_DESIGN + 20, "s4"); a.lif("f5", 0.5); a.mul_s("f5", "f4", "f5")          # aw / 2
+    a.add_s("f6", "f3", "f5"); a.swc1("f6", G_SPOS, "s4")                                    # x0
+    a.lwc1("f6", G_DESIGN + 0, "s4"); a.sub_s("f6", "f6", "f3"); a.sub_s("f6", "f6", "f3"); a.sub_s("f6", "f6", "f4")
+    a.div_s("f6", "f6", "f2"); a.swc1("f6", G_SPOS + 4, "s4")                                # dx
     a.li("s1", 0)
     a.label("H_loop")
     a.mtc1("s1", "f0"); a.nop(); a.cvt_s_w("f0", "f0")
-    a.lwc1("f1", G_DESIGN + 12, "s4"); a.mul_s("f0", "f0", "f1"); a.lwc1("f1", G_DESIGN + 8, "s4"); a.add_s("f0", "f0", "f1")
+    a.lwc1("f1", G_SPOS + 4, "s4"); a.mul_s("f0", "f0", "f1"); a.lwc1("f1", G_SPOS, "s4"); a.add_s("f0", "f0", "f1")
     a.mul_s("f0", "f0", "f20"); a.lwc1("f1", 0, "s0"); a.add_s("f0", "f0", "f1")
     a.swc1("f0", G_POS, "s4"); a.swc1("f22", G_POS + 4, "s4")
     a.lq("a0", G_SHADOW, "s4")                               # outline / shadow behind the arrow
@@ -1160,7 +1179,10 @@ def build_code(lay):
     a.label("H_draw")
     a.addiu("a1", "s4", G_POS); a.li("a2", 4); a.addiu("a3", "s4", G_CORN); a.addiu("t0", "s4", G_UVS)
     a.jal(A["QUAD"]); a.nop()
-    a.addiu("s1", "s1", 1); a.slti("t1", "s1", 16); a.bnez("t1", "H_loop"); a.nop()
+    a.mem("lw", "t2", A["REGION"] + 0xE78, "t2")
+    a.slti("t1", "t2", 33); a.bnez("t1", "H_n5"); a.nop(); a.li("t2", 32)
+    a.label("H_n5")
+    a.addiu("s1", "s1", 1); a.slt("t1", "s1", "t2"); a.bnez("t1", "H_loop"); a.nop()
     a.label("H_ret")
     for k, fr in enumerate(("f20", "f21", "f22", "f23")):
         a.lwc1(fr, 0x54 + 4 * k, "sp")
