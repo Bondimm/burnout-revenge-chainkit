@@ -12,8 +12,9 @@ set built in — and lets you tune every part of it.
   - Europe / PAL — `SLES-53507`
   - USA / NTSC — `SLUS-21242`
 - Your image is **only read, never modified**; ChainKit writes a **new** `.iso`.
-- **Optional:** the real Dominator arrow art, taken from **your own** Burnout Dominator disc image. Without it the
-  arrows use Revenge's own chevron. ChainKit contains no game data.
+- **Burnout Dominator is optional — you do not need it.** It only provides the look of the arrows: the real
+  Dominator arrow art, taken from **your own** Burnout Dominator disc image. Without it the arrows use Revenge's own
+  chevron; the supercharge, the arrows and the Burnout chain work exactly the same. ChainKit contains no game data.
 - **Every rule is a setting** — per game mode, per driving action, colours, pop-ups, sounds — with presets
   (*Default (tested)*, *Dominator rules*, *Easy*, *Hard*). Open an image ChainKit made to change its settings
   later, without starting over.
@@ -50,6 +51,9 @@ MusicKit songs, CarKit cars — or the Burnout Chain mod itself (then its settin
 [Change the settings later](#change-the-settings-later)).
 
 ### Step 2 — Your Burnout Dominator ISO (optional)
+**You can skip this step.** Burnout Dominator only changes how the 16 arrows look — the gameplay is the same
+without it, and the PCSX2 cheat never uses it.
+
 For Dominator's arrow image, select your own Burnout Dominator disc image (tested with the European version;
 ChainKit checks any other version when you select it). ChainKit copies the one
 arrow texture from it into the new image (in place of the unused online voice-chat icon). Leave it empty to use

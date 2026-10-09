@@ -209,9 +209,9 @@ class ChainKitGui:
                 return "%s exists in that folder: tick 'Replace it' or choose another folder" % \
                     os.path.basename(self.pnach_path())
             return None
-        if self.dom_path and not self.dom_ok:
-            return "the Burnout Dominator ISO cannot be used (%s) - clear it to use Revenge's chevron" % (
-                self.dom_error or "not checked yet")
+        if self.dom_path and not self.dom_ok and not self.dom_error:
+            return "wait until the Burnout Dominator ISO has been checked"
+        # an unusable Dominator ISO never blocks saving: it is optional, the arrows then use Revenge's chevron
         if self.disc.applied and not self.changed_settings() and not self.adds_arrow():
             return "this ISO already has the mod with these settings: change a setting first"
         out = self.out_path.strip()
@@ -531,6 +531,8 @@ class ChainKitGui:
                      "on its new ISO.")
         # ---- 2
         U.step(2, "Arrow art: your Burnout Dominator ISO (optional)", self.dom_ok)
+        U.text(GREY, "Optional - you do not need Burnout Dominator. It only changes how the 16 arrows look; the "
+                     "supercharge, arrows and Burnout chain work the same without it.")
         imgui.begin_disabled(busy)
         imgui.set_next_item_width(-U.bw("Browse...", "Clear"))
         changed, v = imgui.input_text("##dom", self.dom_path, imgui.InputTextFlags_.enter_returns_true)
@@ -549,7 +551,7 @@ class ChainKitGui:
         elif self.dom_ok:
             U.text(GREEN, "Dominator's arrow will be used.")
         elif self.dom_path and self.dom_error:
-            U.text(RED, "! " + self.dom_error)
+            U.text(YELLOW, "! %s - not used: the arrows will use Revenge's own chevron." % self.dom_error)
         elif not self.dom_path:
             if self.disc and self.disc.applied:
                 U.text(GREY, "This ISO uses %s." % ("Dominator's arrow" if self.disc.arrow_art == "dominator"

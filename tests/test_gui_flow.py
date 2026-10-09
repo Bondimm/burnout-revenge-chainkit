@@ -56,7 +56,7 @@ def test_gui_flow(tmp_path, monkeypatch):
         # ---- 2) the Dominator ISO (optional): a Revenge ISO is refused there
         g.set_dominator(ISO)
         assert not _wait(g).ok and not g.dom_ok and "Burnout Revenge image" in g.dom_error
-        assert "Dominator ISO cannot be used" in g.save_problem()
+        assert g.save_problem() is None                       # optional: an unusable one never blocks saving
         g.set_dominator(DOM)
         if DOM:
             assert _wait(g).ok and g.dom_ok
