@@ -128,13 +128,13 @@ def build(lay=None, tunables=None, old_table=None):
     return lay, code, labels, data
 
 
-def patch(data, tunables=None, inline_texts=False):
+def patch(data, tunables=None, inline_texts=False, tex_blob=None):
     """Return (patched ELF bytes, report dict). `data` = the PAL or USA executable (original, CarKit and/or
     MusicKit output). inline_texts: the pop-up texts come from the cave (used for the PCSX2 cheat)."""
     if is_applied(data):
         raise ChainError("the Burnout Chain patch is already applied (use 'tune' to change settings)")
     target = crc(data)
-    lay = cave.Layout(region_of(data), inline_texts)
+    lay = cave.Layout(region_of(data), inline_texts, tex_copy=tex_blob is not None)
     A = lay.a
     e = Elf(data)
     ph = _segs(e)
@@ -163,6 +163,12 @@ def patch(data, tunables=None, inline_texts=False):
         t = cave.build_texts(lay)
         o = ne.file_offset(lay.texts)
         ne.d[o:o + len(t)] = t
+    if tex_blob is not None:
+        assert len(tex_blob) == cave.TEX_SIZE - cave.TEX_FROM
+        o = ne.file_offset(lay.texsrc)
+        if any(ne.d[o:o + len(tex_blob)]):
+            raise ChainError("the space for the arrow texture is in use (MusicKit with more than 95 songs?)")
+        ne.d[o:o + len(tex_blob)] = tex_blob
     hk = cave.hooks(lay, labels)
     for va, old, new, what in hk:
         ne.w32(va, new)

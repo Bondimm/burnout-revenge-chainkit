@@ -19,8 +19,8 @@ def _load(name, filename, **inject):
     return mod
 
 
-for _key in ("PAL", "USA"):
-    _core = _load("test_cave__cheat_" + _key, "test_cave.py", REGION_KEY=_key, INLINE=True)
+for _key, _tex in (("PAL", True), ("USA", False)):      # PAL with Dominator art copied from the cave, USA without
+    _core = _load("test_cave__cheat_" + _key, "test_cave.py", REGION_KEY=_key, INLINE=True, TEXCOPY=_tex)
     _settings = _load("test_cave_settings__cheat_" + _key, "test_cave_settings.py", BASE_MODULE=_core)
     assert _core.LAY.inline and _core.REGION["key"] == _key
     for _mod in (_core, _settings):

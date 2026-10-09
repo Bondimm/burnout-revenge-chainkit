@@ -191,13 +191,20 @@ RUNTIME_RANGES = [(STATE, STATE + 0x100), (G + G_ONLINE, G + G_MAGIC), (G + G_FS
                   (G + G_POS, G + G_UVS), (MSGBUF, ORIGP1 + 8), (LABELBUF, LABELBUF + 0x20), (SCORN, SCORN + 0x20),
                   (BYPAD, CTRLT + 32)]
 # inline texts (PCSX2 cheat) sit at the very end of the hole, right after the code
+# Dominator arrow in a PCSX2 cheat: the cheat cannot change GLOBAL.TXD, so the cave keeps a copy of Boost_Arrow's
+# texture data (record bytes 0x248..0x580: the GS upload packet with CLUT and pixels - the game uses them exactly as
+# loaded from the file) and copies it over the loaded TalkIcon record (HUD texture slot 28) before each draw. It sits
+# in the bottom of the hole after MusicKit's song table (95 songs at most).
+TEX_FROM, TEX_SIZE = 0x248, 0x580
 
 
 class Layout:
-    def __init__(self, region=regions.PAL, inline_texts=False):
-        """inline_texts: the pop-up texts come from the cave itself (PCSX2 cheat: no MAIN*.BIN entries)."""
+    def __init__(self, region=regions.PAL, inline_texts=False, tex_copy=False):
+        """inline_texts: the pop-up texts come from the cave itself (PCSX2 cheat: no MAIN*.BIN entries).
+        tex_copy: the Dominator arrow comes from the cave too (PCSX2 cheat with the user's Dominator art)."""
         self.region = region
         self.inline = inline_texts
+        self.tex_copy = tex_copy
         self.a = a = addresses(region)
         R = a["REGION"]
         self.state, self.g, self.labelbuf, self.msgbuf = R + STATE, R + G, R + LABELBUF, R + MSGBUF
@@ -214,6 +221,12 @@ class Layout:
             self.text_addr[mid] = p
             p += (2 * (len(inline_text(name)) + 1) + 3) & ~3
         assert p <= a["HOLE_END"]
+        assert self.texsrc + TEX_SIZE - TEX_FROM <= R
+
+    @property
+    def texsrc(self):
+        """Address of the arrow texture copy (tex_copy): after MusicKit's song table (95 songs at most)."""
+        return (self.region["mk_table_new"] + 95 * 12 + 15) & ~15
 
     def entry(self, mid):
         """Address of the message table entry of one of our messages."""
@@ -1104,6 +1117,11 @@ def build_code(lay):
     # texture = HUD texture slot arrow_tex_slot
     a.mem("lw", "t1", a.gaddr(T + 0x28), "t1"); a.sll("t1", "t1", 2); a.la("t2", A["HUDTEX"]); a.addu("t2", "t2", "t1")
     a.lw("a0", 0, "t2"); a.beqz("a0", "H_ret"); a.nop()
+    if lay.tex_copy:                                         # cheat with Dominator art: refresh the texture data
+        a.la("t3", lay.texsrc); a.addiu("t4", "a0", TEX_FROM); a.li("t5", (TEX_SIZE - TEX_FROM) // 4)
+        a.label("H_tcopy")
+        a.lw("t6", 0, "t3"); a.sw("t6", 0, "t4"); a.addiu("t3", "t3", 4); a.addiu("t5", "t5", -1)
+        a.bnez("t5", "H_tcopy"); a.addiu("t4", "t4", 4)
     a.jal(A["SETTEX"]); a.nop()
     # lit = arrows / (half * max) * 16
     a.lwc1("f0", S_ARROWS, "s4"); a.lwc1("f1", B_MAX + C_BOOST, "s1"); a.gfloat("f2", 0x18); a.mul_s("f1", "f1", "f2")

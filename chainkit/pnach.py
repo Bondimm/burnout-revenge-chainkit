@@ -59,17 +59,29 @@ def classify(lay, addr):
     return "continuous"
 
 
-def writes(elf_data, values):
+def arrow_blob(revenge_txd, dominator_txd):
+    """Boost_Arrow's texture data for the cheat (record bytes TEX_FROM..TEX_SIZE) - checked to fit TalkIcon exactly
+    like the ISO version's merge."""
+    from . import assets
+    merged = assets.merge_arrow(revenge_txd, dominator_txd)
+    ro, rs = assets.txd_records(merged)[assets.TARGET]
+    if rs != cave.TEX_SIZE:
+        raise elfpatch.ChainError("unexpected arrow texture size %#x" % rs)
+    return merged[ro + cave.TEX_FROM:ro + rs]
+
+
+def writes(elf_data, values, tex_blob=None):
     """[(address, word, 'once'|'continuous')] for the cheat. elf_data = the game's executable (original, MusicKit or
-    CarKit output; not one that already has ChainKit)."""
+    CarKit output; not one that already has ChainKit). tex_blob = arrow_blob(...) for Dominator's arrow."""
     if elfpatch.is_applied(elf_data):
         raise elfpatch.ChainError("this executable already has the Burnout Chain mod (ISO version): make the cheat "
                                   "from your ISO without the mod, and do not use both together")
     values = settings.check(values)
-    values["arrow_tex_slot"] = 12                          # Revenge's chevron: a cheat cannot add the Dominator art
+    # Dominator's arrow (copied into TalkIcon by the cave, slot 28) or Revenge's chevron (slot 12)
+    values["arrow_tex_slot"] = 28 if tex_blob is not None else 12
     region = elfpatch.region_of(elf_data)
-    lay = cave.Layout(region, inline_texts=True)
-    patched, _ = elfpatch.patch(elf_data, values, inline_texts=True)
+    lay = cave.Layout(region, inline_texts=True, tex_copy=tex_blob is not None)
+    patched, _ = elfpatch.patch(elf_data, values, inline_texts=True, tex_blob=tex_blob)
     before, after = loaded_words(elf_data), loaded_words(patched)
     out = []
     for addr in sorted(after):
@@ -85,17 +97,24 @@ def writes(elf_data, values):
     return out, region
 
 
-def render(elf_data, values, preset=None):
+def render(elf_data, values, preset=None, tex_blob=None):
     """The .pnach file text."""
-    ws, region = writes(elf_data, values)
+    ws, region = writes(elf_data, values, tex_blob)
     key = region["key"]
-    desc = "Burnout Dominator's supercharge and Burnout chain. Settings: %s. Arrows: Revenge's chevron. " \
-           "Do not use together with a ChainKit ISO." % (preset or settings.preset_of(settings.check(values))
-                                                         or "custom")
+    if tex_blob is not None:
+        arrows = "Burnout Dominator's arrow from your own disc (personal use only: do not share this file)"
+    else:
+        arrows = "Revenge's chevron"
+    name = preset or settings.preset_of(settings.check(values)) or "custom"
+    desc = ("Burnout Dominator's supercharge and Burnout chain. Settings: %s. Arrows: %s. Do not use together "
+            "with a ChainKit ISO." % (name, arrows))
     lines = ["gametitle=%s" % TITLE[key], "",
              "[%s]" % SECTION, "author=Bondimm (ChainKit)", "description=%s" % desc,
              "// %d words, all written once when the game boots (patch=0): switch the cheat on, then start "
              "(or restart) the game." % len(ws)]
+    if tex_blob is not None:
+        lines.append("// Contains texture data of Burnout Dominator (Electronic Arts) taken from your own disc: "
+                     "for your personal use only - do not share or upload this file.")
     for addr, w, kind in ws:
         lines.append("patch=0,EE,2%07X,extended,%08X" % (addr, w))
     return "\n".join(lines) + "\n", region

@@ -13,7 +13,9 @@ from chainkit.mips import Cpu, RI              # noqa: E402
 # The same suite runs for the USA build: tests/test_cave_usa.py loads this file with REGION_KEY = "USA".
 REGION = regions.BY_KEY[globals().get("REGION_KEY", "PAL")]
 INLINE = globals().get("INLINE", False)       # PCSX2 cheat build: texts from the cave (test_cave_cheat.py)
-LAY = cave.Layout(REGION, INLINE)
+TEXCOPY = globals().get("TEXCOPY", False)     # ... with the Dominator arrow copied from the cave
+LAY = cave.Layout(REGION, INLINE, TEXCOPY)
+TEXBLOB = bytes((k * 7 + 3) & 0xFF for k in range(cave.TEX_SIZE - cave.TEX_FROM))   # stand-in texture data
 A = LAY.a
 T = LAY.t                                      # PAL address -> address in this build
 OTHER_RA = 0x2CE9B8                            # a return address that is no award call site (in both builds)
@@ -35,6 +37,8 @@ class Game:
         m.write(LAY.code, CODE)
         if INLINE:
             m.write(LAY.texts, cave.build_texts(LAY))
+        if TEXCOPY:
+            m.write(LAY.texsrc, TEXBLOB)
         for i, (s, mu) in enumerate(zip(SIZES, (1, 2, 3, 4))):
             m.wf32(A["TBL_SIZES"] + 4 * i, s); m.wf32(A["TBL_MULT"] + 4 * i, mu); m.wf32(A["TBL_RATE"] + 4 * i, 10)
         m.wf32(A["MINBOOST"], 1.0)
@@ -748,3 +752,15 @@ def test_supercharged_idle_bar_just_below_max_is_not_lost():
     for _ in range(10):
         g.tick()
     assert g.super() == 1
+
+
+def test_cheat_arrow_texture_is_copied_before_drawing():
+    if not TEXCOPY:
+        return
+    g = supercharged(); g.boosting(True)
+    hud = 0x60000; g.cpu.m.w32(hud + cave.C_HUDCAR, CAR)
+    rec = 0x01234560                                     # HUD texture slot 28 = the loaded TalkIcon record
+    seen = []
+    g.cpu.stubs[A["SETTEX"]] = lambda cpu: seen.append(cpu.m.read(rec + cave.TEX_FROM, len(TEXBLOB)))
+    g.run("HUDLBL", a0=0x62000, a1=4, s2=hud)
+    assert seen == [TEXBLOB]

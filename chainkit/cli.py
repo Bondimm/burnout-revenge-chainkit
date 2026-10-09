@@ -148,7 +148,8 @@ def _run(a, ap):
             if a.region != "both" and region["key"].lower() != a.region:
                 print("skipped %s (%s, not %s)" % (iso_path, region["key"], a.region.upper()))
                 continue
-            core.build_pnach(iso_path, out_dir, values, force=a.force, check_with=a.check_with)
+            core.build_pnach(iso_path, out_dir, values, force=a.force, check_with=a.check_with,
+                             dominator=a.dominator)
             made += 1
         if not made:
             raise core.KitError("no ISO of the chosen region given")

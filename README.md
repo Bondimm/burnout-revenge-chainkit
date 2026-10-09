@@ -85,12 +85,14 @@ verified. The log shows the result (*RESULT: OK*). Load the new `.iso` in PCSX2 
 | Plays on | PCSX2 **and** a real PS2 (burned disc / OPL) | PCSX2 only |
 | Your game files | a new `.iso` next to yours (~4 GB) | none changed - a ~100 KB text file |
 | Switch the mod off | play your original ISO | untick it in PCSX2's cheat list (takes effect at the next boot) |
-| Arrow art | Dominator's arrow from your Dominator disc (optional) | Revenge's own chevron (a cheat cannot change disc files) |
+| Arrow art | Dominator's arrow from your Dominator disc (optional) | Dominator's arrow from your Dominator disc (optional; the cheat file then contains it - personal use only, do not share), otherwise Revenge's own chevron (hard to see) |
 | Pop-up texts | in every language of your disc | English |
 | Settings | all | all (same code, same settings) |
 
-Both are the same mod: the cheat writes exactly the memory the modded ISO has (checked by the tests), only the
-arrow texture and the source of the pop-up texts differ.
+Both are the same mod: the cheat writes exactly the memory the modded ISO has (checked by the tests). Differences:
+the pop-up texts come from the cheat itself (English), and Dominator's arrow is copied from the cheat into the
+game's unused online voice-chat icon in memory (the ISO version replaces it in the disc's texture file). **Choose
+your Burnout Dominator ISO in step 2 for the cheat too** - Revenge's chevron is barely visible on the bar.
 
 ### Install the PCSX2 cheat
 1. Save the cheat with ChainKit (window: **PCSX2 cheat (.pnach)**; command line: `pnach --iso "Burnout Revenge.iso"`).

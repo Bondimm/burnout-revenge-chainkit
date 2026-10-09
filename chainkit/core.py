@@ -359,7 +359,7 @@ def pnach_target(src, out_dir):
     return os.path.join(out_dir, pnach.file_name(region)), region
 
 
-def build_pnach(src, out_dir, values=None, force=False, check_with=(), log=print):
+def build_pnach(src, out_dir, values=None, force=False, check_with=(), log=print, dominator=None):
     """Write the PCSX2 cheat for the game on `src` (an ISO without the mod) into out_dir. Returns the path."""
     from . import pnach
     if not out_dir or not os.path.isdir(out_dir):
@@ -372,8 +372,16 @@ def build_pnach(src, out_dir, values=None, force=False, check_with=(), log=print
             raise KitError("this ISO already has the Burnout Chain mod - make the cheat from your ISO without the "
                            "mod (and do not use the cheat together with a ChainKit ISO)")
         log("source: %s (%s)" % (os.path.basename(src), d.summary()))
+        blob = None
+        if dominator:
+            try:
+                blob = pnach.arrow_blob(d.img.read_file(assets.GLOBAL_TXD), dominator_txd(dominator))
+            except ValueError as exc:
+                raise KitError("the Dominator arrow texture does not fit (%s)" % exc)
+            if d.musickit and d.songs > 95:
+                raise KitError("this ISO has more than 95 MusicKit songs: no room for the arrow texture")
         try:
-            text, region = pnach.render(d.elf, values, settings.preset_of(values))
+            text, region = pnach.render(d.elf, values, settings.preset_of(values), blob)
         except elfpatch.ChainError as exc:
             raise KitError(str(exc))
     path = os.path.join(out_dir, pnach.file_name(region))
@@ -389,5 +397,7 @@ def build_pnach(src, out_dir, values=None, force=False, check_with=(), log=print
     with open(path, "w", encoding="utf-8", newline="\n") as f:
         f.write(text)
     n = text.count("\npatch=")
-    log("PCSX2 cheat: %s (%d memory writes, arrows: Revenge's chevron, English pop-up texts)" % (path, n))
+    log("PCSX2 cheat: %s (%d memory writes, arrows: %s, English pop-up texts)" % (
+        path, n, "Burnout Dominator's arrow - personal use only, do not share the file" if blob is not None
+        else "Revenge's chevron"))
     return path

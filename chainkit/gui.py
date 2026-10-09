@@ -395,10 +395,11 @@ class ChainKitGui:
             self.log.error(problem[0].upper() + problem[1:])
             return
         src, out_dir, values = self.disc.path, self.pnach_dir, dict(self.values)
+        dom = self.dom_path if self.dom_ok else None
 
         def run(job):
             job.update(0.3, "writing the PCSX2 cheat")
-            path = core.build_pnach(src, out_dir, values, force=True, log=self.log)
+            path = core.build_pnach(src, out_dir, values, force=True, log=self.log, dominator=dom)
             self.last_save = {"out": path, "ok": True, "values": values, "pnach": True}
             self.pnach_replace = False
             self.log("Done. In PCSX2: Settings > Emulation > enable cheats (or the game's Properties > Cheats), "
@@ -545,9 +546,11 @@ class ChainKitGui:
         if imgui.button("Clear##dom"):
             self.set_dominator("")
         imgui.end_disabled()
-        if self.output_type == "pnach":
-            U.text(GREY, "Not used for a PCSX2 cheat (a cheat cannot change disc files): the arrows use Revenge's "
-                         "own chevron.")
+        if self.output_type == "pnach" and self.dom_ok:
+            U.text(YELLOW, "Dominator's arrow will be copied into the cheat file: it then contains EA artwork from "
+                           "your disc - for your personal use only, do not share it.")
+        elif self.output_type == "pnach":
+            U.text(GREY, "Without it the cheat uses Revenge's own chevron for the arrows.")
         elif self.dom_ok:
             U.text(GREEN, "Dominator's arrow will be used.")
         elif self.dom_path and self.dom_error:
@@ -570,7 +573,8 @@ class ChainKitGui:
         if imgui.radio_button("PCSX2 cheat (.pnach)", self.output_type == "pnach"):
             self.output_type = "pnach"
         U.tip("Writes a small cheat file for PCSX2 instead: no new ISO, switch it on or off in PCSX2's cheat list. "
-              "PCSX2 only (not a real PS2), Revenge's chevron arrows, English pop-ups.")
+              "PCSX2 only (not a real PS2), English pop-ups; Dominator's arrow only with your Dominator ISO (step 2), "
+              "otherwise Revenge's chevron.")
         if self.output_type == "iso":
             imgui.set_next_item_width(-U.bw("Browse..."))
             _, self.out_path = imgui.input_text("##out", self.out_path)

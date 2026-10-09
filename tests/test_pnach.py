@@ -112,6 +112,20 @@ def test_cheat_memory_equals_the_iso_build(iso):
     isoelf, _ = elfpatch.patch(elf, settings.DEFAULTS)
     with pytest.raises(elfpatch.ChainError, match="already has"):
         pnach.render(isoelf, settings.DEFAULTS)
+    # with the user's Dominator art: the texture data sits after MusicKit's table, copied to TalkIcon by the cave
+    dom = os.environ.get("CHAINKIT_DOMINATOR", "")
+    if dom and os.path.exists(dom):
+        with core.Disc(iso) as d:
+            blob = pnach.arrow_blob(d.img.read_file("/DATA/GLOBAL.TXD"), core.dominator_txd(dom))
+        text2, _ = pnach.render(elf, values, tex_blob=blob)
+        patched2, _ = elfpatch.patch(elf, dict(settings.check(values), arrow_tex_slot=28), inline_texts=True,
+                                     tex_blob=blob)
+        want2 = pnach.loaded_words(patched2)
+        got2 = pnach.apply(elf, text2)
+        assert {a: w for a, w in want2.items() if got2.get(a, 0) != w} == {}
+        lay2 = cave.Layout(region, inline_texts=True, tex_copy=True)
+        assert all(got2.get(lay2.texsrc + k, 0) == int.from_bytes(blob[k:k + 4], "little") for k in range(0, len(blob), 4))
+        assert "personal use only" in text2
     other = os.environ.get("CHAINKIT_OTHER_PNACH", "")
     if other and os.path.exists(other) and region["key"] == "PAL":
         assert pnach.overlaps(text, open(other, encoding="utf-8", errors="replace").read()) == []
