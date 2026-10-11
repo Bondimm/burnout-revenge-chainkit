@@ -393,3 +393,46 @@ def test_partial_refill_without_any_burnout_says_supercharge_lost():
     g = supercharged(); g.boosting(True)                 # chain 0, no arrows lit
     g.set_amt(0.0); g.calls.clear(); g.empty()
     assert g.super() == 0 and cave.M_LOST in g.msgs()    # (silent before v17: only shown with a chain)
+
+
+# ------------------------------------------------------------------------------------------- race Crashbreaker
+def test_race_crashbreaker_sequence_runs_through():
+    """Race Crashbreaker (FUN_00114fa0 arms it on a wreck when the mode allows it, FUN_00205330 detonates):
+    wreck while supercharge-boosting, the detonation empties the bar through FUN_002a3f28 (hook SUB) with the
+    whole amount, the blast takes down rivals (hook TAKEDOWN, several in one frame) while the car is wrecked and
+    driven by the game, then the respawn. Every hook call must return quickly (no cave loop depends on game
+    state that a wreck freezes) and leave a sane bar."""
+    g = supercharged(); set_pad(g, True); g.boosting(True); g.cpu.m.w32(g.st(cave.S_CHAIN), 2)
+    g.cpu.m.wf32(BOOST + cave.B_MULT, 1.0)                   # boost loss multiplier of the bar size
+    steps = []
+
+    def run(label, **regs):
+        g.run(label, **regs); steps.append(g.cpu.steps)
+
+    g.cpu.m.write(CAR + cave.C_INPUT, b"\0")                 # wrecked: the game drives, no pad input
+    g.boosting(False)
+    run("SHRINK", a0=BOOST)                                  # wreck: supercharge + chain end, bar size kept
+    assert g.super() == 0 and g.u(BOOST + cave.B_IDX) == 3
+    for frame in range(30):                                  # wreck camera, button still down
+        g.cpu.m.wf32(CAR + cave.C_TIME, g.f(CAR + cave.C_TIME) + 1 / 60); g.tick(); steps.append(g.cpu.steps)
+    amt = g.amt()
+    run("SUB", s0=BOOST, f12=amt)                            # detonation: FUN_002a3f28(boost, whole amount)
+    assert g.amt() == 0.0
+    for k in range(3):                                       # blast takedowns, same frame
+        run("TAKEDOWN", a0=BOOST); g.set_amt(g.max())        # (Revenge's takedown refill after the hook)
+    assert g.super() == 1
+    set_pad(g, False)
+    for frame in range(120):                                 # explosion, slow motion (dt 0), respawn countdown
+        if frame == 30:
+            g.cpu.m.wf32(A["DT"], 0.0)
+        if frame == 60:
+            g.cpu.m.wf32(A["DT"], 1 / 60)
+        g.cpu.m.wf32(CAR + cave.C_TIME, g.f(CAR + cave.C_TIME) + 1 / 60); g.tick(); steps.append(g.cpu.steps)
+        run("DRAIN", s0=BOOST, f0=g.f(BOOST + cave.B_RATE))
+    g.cpu.m.write(CAR + cave.C_INPUT, b"\1")                 # respawned: the player drives again
+    for frame in range(600):
+        g.cpu.m.wf32(CAR + cave.C_TIME, g.f(CAR + cave.C_TIME) + 1 / 60); g.tick(); steps.append(g.cpu.steps)
+        if frame % 60 == 0:
+            pad(g, held=False); steps.append(g.cpu.steps)
+    assert 0.0 <= g.amt() <= g.max() and g.super() in (0, 1)
+    assert max(steps) < 2000, max(steps)
