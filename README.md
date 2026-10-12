@@ -131,6 +131,65 @@ need to start again from the original. **Undo changes** goes back to the setting
 
 ---
 
+## PCSX2 HostFS folder (no new ISO)
+
+A third way for PCSX2: save the mod into a **folder** instead of a new disc image. PCSX2's *Host Filesystem* then
+loads the game's files straight from that folder. It is the same mod as the new ISO (pop-up texts in every
+language of your disc, ChainKit's or Dominator's arrow):
+
+- the first save copies the game's files from your ISO into the folder (once, about 2.5 GB);
+- later saves (other settings) only rewrite the files ChainKit changes — the game executable, and the arrow art if
+  you add Dominator's — no 4 GB ISO each time;
+- **with MusicKit:** save your songs into a folder with MusicKit first, then open **that folder** in ChainKit
+  (step 1, **Folder...**) and save the mod into it. Both kits keep each other's changes. ChainKit refuses to save
+  your ISO over a folder that already has MusicKit songs or the mod (that would lose them).
+
+PCSX2 only (not a real PS2). The Criterion games need a small PCSX2 cheat to read from a folder:
+**Nahelam's HostFS patches** — thanks to [Nahelam](https://github.com/Nahelam) for making them. ChainKit does not
+include that cheat; you download it once.
+
+### Save into a folder
+1. Select your ISO in step 1 — or a game folder with **Folder...** (made by MusicKit or ChainKit; it is then saved
+   into itself).
+2. In the Save step choose **Folder for PCSX2 HostFS** and pick an **empty folder** (not needed for a folder from step 1).
+3. Click **Save to folder**. ChainKit writes the files and a small boot image `Burnout Revenge (HostFS).iso` into
+   the folder (it holds only `SYSTEM.CNF` and the game executable and is rebuilt on every save), then checks the
+   folder like a new ISO.
+
+To change the settings later, open the folder in step 1 with **Folder...** (or click *Open this folder here* after
+saving), change them and save again. Your ISO is never changed.
+
+### Play it in PCSX2 (once)
+1. Download the cheat for your version from
+   [Nahelam's PCSX2 HostFS patches](https://github.com/Nahelam/PCSX2-HostFS-Patches/tree/main/Criterion%20Games),
+   folder *Burnout Revenge*:
+   - Europe / PAL (SLES-53507): `SLES-53507_7E83CC5B_hostfs.pnach`
+   - USA / NTSC (SLUS-21242): `SLUS-21242_D224D348_hostfs.pnach`
+
+   Put it into PCSX2's `cheats` folder (PCSX2: *Tools → Open Data Directory*).
+2. Add your folder to PCSX2's game list (*Settings → Game List → Add...*, without recursive scan). It shows
+   `Burnout Revenge (HostFS).iso`.
+3. Right-click it → *Properties*: on the *Emulation* page switch on **Enable Host Filesystem**; on the *Cheats* page
+   switch on **Enable Cheats** and tick **HostFS**.
+4. Start `Burnout Revenge (HostFS).iso`.
+
+The game CRC stays the same, so PCSX2's widescreen patches still apply (do not use the ChainKit *cheat* on top:
+the folder already has the mod). ChainKit shows these steps after saving, too. As Nahelam notes, with the HostFS
+cheat the network configuration cannot be started from the game (save your network settings on the memory card
+first if you play online).
+
+**Stop the game before you save** into its folder: the running game keeps its files open. On Windows ChainKit
+then refuses to save (nothing is changed) and tells you why; restart the game after saving.
+
+**Linux:** the game asks for its files in mixed letter case while the disc stores them in upper case. That only
+works in a case-insensitive folder — on ext4 for example an empty folder with casefold switched on (`chattr +F`,
+needs a file system created with casefold support). ChainKit warns when the folder is case-sensitive but still lets
+you save and try. Windows and macOS (default file system) need nothing special.
+
+Command line ([optional](#command-line-optional)): `build --iso "Burnout Revenge (Europe).iso" --folder "<folder>"`
+saves into a folder; `build --iso "<folder>"` puts the mod into a folder (e.g. MusicKit's) and
+`tune "<folder>" "<folder>" --set ...` changes its settings.
+
 ## Settings guide
 
 All settings, in the window and on the command line. The window shows them in human units; `chainkit-cli
