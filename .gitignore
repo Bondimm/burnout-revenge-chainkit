@@ -15,3 +15,5 @@ __pycache__/
 SLES_*
 SLUS_*
 docs/screenshots/.home/
+.python/
+.venv-old/

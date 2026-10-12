@@ -18,30 +18,50 @@ jobs:
         # ubuntu-latest = 24.04 x86_64; ubuntu-24.04-arm = Linux aarch64 (free for public repos)
         os: [windows-latest, macos-latest, macos-15-intel, ubuntu-22.04, ubuntu-latest, ubuntu-24.04-arm]
         python: ["3.11", "3.13"]
+        # The installers work with any Python 3.12+: when not every package has a ready-made download for the
+        # installed Python (e.g. a brand-new 3.15), they use another installed Python or download a private one.
+        # "private" = skip the installed Pythons, as on a computer without Python.
+        include:
+          - { os: windows-latest, python: "3.12" }
+          - { os: windows-latest, python: "3.14" }
+          - { os: windows-latest, python: "3.15" }
+          - { os: windows-latest, python: private }
+          - { os: ubuntu-latest, python: "3.12" }
+          - { os: ubuntu-latest, python: "3.14" }
+          - { os: ubuntu-latest, python: "3.15" }
+          - { os: ubuntu-latest, python: private }
+          - { os: macos-latest, python: "3.12" }
+          - { os: macos-latest, python: "3.14" }
+          - { os: macos-latest, python: "3.15" }
+          - { os: macos-latest, python: private }
+          - { os: macos-15-intel, python: "3.14" }
+          - { os: macos-15-intel, python: private }
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.os == 'ubuntu-24.04-arm' }}
     timeout-minutes: 30
+    env:
+      CHAINKIT_NO_PAUSE: "1"
+      CHAINKIT_PRIVATE_PYTHON: ${{ matrix.python == 'private' && '1' || '0' }}
     steps:
       - uses: actions/checkout@v5
 
       - uses: actions/setup-python@v6
+        if: matrix.python != 'private'
         with:
           python-version: ${{ matrix.python }}
+          allow-prereleases: true
 
       - name: Run setup.bat (the Windows installer)
         if: runner.os == 'Windows'
         shell: cmd
-        env:
-          CHAINKIT_NO_PAUSE: "1"
         run: |
           call setup.bat || exit /b 1
           .venv\Scripts\python.exe --version
           call chainkit-cli.bat presets || exit /b 1
+          call setup.bat || exit /b 1
 
       - name: Run setup.command (the macOS installer)
         if: runner.os == 'macOS'
-        env:
-          CHAINKIT_NO_PAUSE: "1"
         run: ./setup.command
 
       - name: Check the macOS launchers
@@ -51,7 +71,7 @@ jobs:
           .venv/bin/python --version
           ./chainkit-cli.sh --help > /dev/null
           ./chainkit-cli.sh presets
-          CHAINKIT_NO_PAUSE=1 ./setup.command   # a second run only checks (idempotent)
+          ./setup.command   # a second run only checks (idempotent)
 
       - name: System libraries (Linux, for the GUI screenshot only)
         if: runner.os == 'Linux'
@@ -61,8 +81,6 @@ jobs:
 
       - name: Run setup.sh (the Linux installer)
         if: runner.os == 'Linux'
-        env:
-          CHAINKIT_NO_PAUSE: "1"
         run: ./setup.sh
 
       - name: Check the Linux launchers
@@ -72,13 +90,20 @@ jobs:
           .venv/bin/python --version
           ./chainkit-cli.sh --help > /dev/null
           ./chainkit-cli.sh presets
-          CHAINKIT_NO_PAUSE=1 ./setup.sh   # a second run only checks (idempotent)
+          ./setup.sh   # a second run only checks (idempotent)
+
+      - name: Which Python the installer used
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then PY=.venv/Scripts/python.exe; else PY=.venv/bin/python; fi
+          "$PY" -c "import sys, numpy, imgui_bundle; print(sys.version); print(sys.executable)"
+          if [ -d .python ]; then echo "private Python:"; ls .python; fi
 
       - name: Tests (disc tests skip without an ISO)
         shell: bash
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then PY=.venv/Scripts/python.exe; else PY=.venv/bin/python; fi
-          "$PY" -m pip install capstone   # optional: encoder round trip test
+          "$PY" -m pip install --only-binary=:all: capstone   # optional: encoder round trip test
           "$PY" -m pytest -v -rs tests
 
       - name: GUI screenshot (needs an OpenGL context on the runner)
@@ -97,3 +122,29 @@ jobs:
           name: gui-${{ matrix.os }}-py${{ matrix.python }}
           path: gui.png
           retention-days: 7
+
+  no-python:
+    # a Linux system without any Python: setup.sh downloads a private one
+    name: debian-slim container / no Python installed
+    runs-on: ubuntu-latest
+    container: debian:12-slim
+    timeout-minutes: 30
+    env:
+      CHAINKIT_NO_PAUSE: "1"
+    steps:
+      - name: Basic tools and the OpenGL libraries only (no Python)
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates curl git libgl1 libegl1 libxkbcommon0
+          if command -v python3 || command -v python; then echo "Python is installed"; exit 1; fi
+
+      - uses: actions/checkout@v5
+
+      - name: Run setup.sh
+        run: ./setup.sh
+
+      - name: Tests (disc tests skip without an ISO)
+        run: |
+          .venv/bin/python --version
+          ./chainkit-cli.sh presets
+          .venv/bin/python -m pytest -v -rs tests
