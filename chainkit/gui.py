@@ -17,7 +17,7 @@ import time
 import traceback
 from types import SimpleNamespace
 
-from . import core, settings
+from . import core, hostfs, settings
 
 TITLE = "ChainKit - Burnout Chain for Burnout Revenge"
 RED = (1.0, 0.45, 0.45, 1.0)
@@ -107,6 +107,7 @@ def disc_info(path):
     """Everything the window shows about an ISO (read once; the file is closed again)."""
     with core.Disc(path) as d:
         return SimpleNamespace(path=path, summary=d.summary(), applied=d.applied, values=d.values,
+                               is_folder=d.is_folder, elf_path=d.elf_path, steps=d.hostfs_steps(),
                                problems=d.problems(), arrow_art=d.arrow_art, musickit=d.musickit, cars_changed=d.cars_changed,
                                songs=d.songs, crc=d.crc, langs=d.langs, region=d.region)
 
@@ -120,7 +121,12 @@ class ChainKitGui:
         self.iso_path = self.saved.get("iso") or ""
         self.dom_path = self.saved.get("dominator") or ""
         self.out_path = self.saved.get("out") or ""
-        self.output_type = self.saved.get("output_type") if self.saved.get("output_type") in ("iso", "pnach") else "iso"
+        self.output_type = self.saved.get("output_type") if self.saved.get("output_type") in ("iso", "pnach", "folder") \
+            else "iso"
+        self.folder_path = self.saved.get("folder") or ""
+        self._folder_key = None
+        self._folder_info = None
+        self.folder_gen = 0            # bumped after a save into a folder, so its info is read again
         self.pnach_dir = self.saved.get("pnach_dir") or core.KIT_DIR
         self.pnach_replace = False
         try:
@@ -155,7 +161,7 @@ class ChainKitGui:
     # ------------------------------------------------------------------ state
     def save_settings(self):
         self.saved.update({"iso": self.iso_path, "dominator": self.dom_path, "out": self.out_path,
-                           "output_type": self.output_type, "pnach_dir": self.pnach_dir,
+                           "output_type": self.output_type, "pnach_dir": self.pnach_dir, "folder": self.folder_path,
                            "values": settings.to_json(self.values)["settings"],
                            "open_groups": sorted(self.open_groups)})
         self.saved.pop("demo", None)
@@ -192,6 +198,33 @@ class ChainKitGui:
         region = getattr(self.disc, "region", None) or regions.PAL
         return os.path.join(self.pnach_dir or "", pnach.file_name(region))
 
+    def to_folder(self):
+        """Saving into a HostFS game folder (chosen in step 3, or the folder opened in step 1)."""
+        return self.output_type == "folder" or bool(self.disc is not None and getattr(self.disc, "is_folder", False))
+
+    def folder_target(self):
+        return self.disc.path if self.disc is not None and getattr(self.disc, "is_folder", False) else self.folder_path
+
+    def folder_info(self):
+        """{"problem", "plan", "case_sensitive"} of the output folder (cached; read again after a save)."""
+        target = (self.folder_target() or "").strip()
+        if self.disc is None or not target or not os.path.exists(getattr(self.disc, "path", "") or ""):
+            return None
+        key = (self.disc.path, os.path.abspath(target), self.folder_gen)
+        if self._folder_key != key:
+            self._folder_key = key
+            info = {"problem": None, "plan": None, "case_sensitive": False}
+            try:
+                info["plan"] = core.folder_plan(self.disc.path, target)
+            except Exception as exc:
+                info["problem"] = str(exc)
+            probe = os.path.abspath(target)
+            while not os.path.isdir(probe) and os.path.dirname(probe) != probe:
+                probe = os.path.dirname(probe)
+            info["case_sensitive"] = os.path.isdir(probe) and hostfs.case_sensitive(probe)
+            self._folder_info = info
+        return self._folder_info
+
     def save_problem(self):
         """Why "Save" cannot be pressed now (None when it can)."""
         if self.busy():
@@ -200,7 +233,7 @@ class ChainKitGui:
             return "select your Burnout Revenge ISO first"
         if self.disc.problems:
             return self.disc.problems[0]
-        if self.output_type == "pnach":
+        if self.output_type == "pnach" and not self.to_folder():
             if self.disc.applied:
                 return "this ISO already has the mod - for a PCSX2 cheat select your ISO without the mod"
             if not os.path.isdir(self.pnach_dir or ""):
@@ -213,7 +246,15 @@ class ChainKitGui:
             return "wait until the Burnout Dominator ISO has been checked"
         # an unusable Dominator ISO never blocks saving: it is optional, the arrows then use ChainKit's arrow
         if self.disc.applied and not self.changed_settings() and not self.adds_arrow():
-            return "this ISO already has the mod with these settings: change a setting first"
+            return "this %s already has the mod with these settings: change a setting first" % (
+                "folder" if getattr(self.disc, "is_folder", False) else "ISO")
+        if self.to_folder():
+            if not (self.folder_target() or "").strip():
+                return "choose the folder for PCSX2 HostFS"
+            info = self.folder_info()
+            if info and info["problem"]:
+                return info["problem"]
+            return None
         out = self.out_path.strip()
         if not out:
             return "choose where to save the new ISO"
@@ -236,8 +277,8 @@ class ChainKitGui:
         if not path:
             self.disc_error = "Choose your Burnout Revenge ISO (Europe SLES-53507 or USA SLUS-21242) with Browse..."
             return
-        if not os.path.isfile(path):
-            self.disc_error = "ISO not found"
+        if not os.path.exists(path):
+            self.disc_error = "ISO not found" if path.lower().endswith(".iso") else "ISO or folder not found"
             return
 
         def run(job):
@@ -259,8 +300,14 @@ class ChainKitGui:
                 self.log("%s: %s" % (os.path.basename(path), info.summary))
             if info.musickit:
                 self.log("MusicKit songs found - good: MusicKit has to come before ChainKit")
-            if not self.out_path or os.path.abspath(self.out_path) == os.path.abspath(path):
-                self.out_path = core.default_output(path, "Burnout Chain settings" if info.applied else "Burnout Chain")
+            if info.is_folder:
+                self.log("HostFS folder: it is saved into itself (and its boot image rebuilt)")
+            else:
+                if not self.out_path or os.path.abspath(self.out_path) == os.path.abspath(path):
+                    self.out_path = core.default_output(path, "Burnout Chain settings" if info.applied
+                                                        else "Burnout Chain")
+                if not self.folder_path or os.path.abspath(self.folder_path) == os.path.abspath(path):
+                    self.folder_path = core.default_folder(path)
             return info
 
         self.start_job("open ISO", run)
@@ -298,6 +345,8 @@ class ChainKitGui:
             low = p.lower()
             if low.endswith(".json"):
                 self.import_settings(p)
+            elif os.path.isdir(p):
+                self.load_disc(p)
             elif low.endswith(".iso"):
                 if self.busy():
                     self.log.error("'%s' is still running" % self.job.title)
@@ -408,8 +457,55 @@ class ChainKitGui:
 
         self.start_job("save PCSX2 cheat", run)
 
+    def build_folder(self):
+        problem = self.save_problem()
+        if problem:
+            self.log.error(problem[0].upper() + problem[1:])
+            return
+        src, folder, values = self.disc.path, os.path.abspath(self.folder_target()), dict(self.values)
+        dom = self.dom_path if self.dom_ok else None
+        same = getattr(self.disc, "is_folder", False)
+
+        def run(job):
+            def progress(f, m):
+                job.update(0.7 * f, m)
+            done = core.save(src, folder, values, dom, self.log, progress, to_folder=True)
+            self.folder_gen += 1
+            job.update(0.7, "checking the folder")
+            self.log("checking the folder%s ..." % ("" if same else " (compares every file with your ISO)"))
+            ok = core.validate(src if not same else folder, folder, dom, self.log, quick=same)
+            self.last_save = {"out": folder, "ok": ok, "values": done, "folder": True}
+            if not ok:
+                raise core.KitError("the check of the folder FAILED - see the log above")
+            if same:                   # read the folder again: its files changed
+                info = disc_info(folder)
+                self.disc = info
+                self.disc_values = dict(info.values) if info.values else None
+            self.log("Done. Start %s in PCSX2 (see the steps in step 3)." % (core.GAME + hostfs.BOOT_SUFFIX))
+            return folder
+
+        self.start_job("save to folder", run)
+
     def save(self):
+        if self.to_folder():
+            return self.build_folder()
         (self.build_pnach if self.output_type == "pnach" else self.build)()
+
+    def pick_src_folder(self):
+        from imgui_bundle import portable_file_dialogs as pfd
+        start = self.iso_path if os.path.isdir(self.iso_path or "") else self._start(self.iso_path)
+        self.open_dialog(pfd.select_folder("Open a game folder for PCSX2 HostFS", start),
+                         lambda r: r and self.load_disc(r))
+
+    def pick_folder(self):
+        from imgui_bundle import portable_file_dialogs as pfd
+        start = self.folder_path if os.path.isdir(self.folder_path or "") else self._start(self.folder_path)
+        self.open_dialog(pfd.select_folder("Folder for PCSX2 HostFS (empty, or with this game's files)", start),
+                         lambda r: r and self.set_folder(r))
+
+    def set_folder(self, path):
+        self.folder_path = path
+        self._folder_key = None
 
     def pick_pnach_dir(self):
         from imgui_bundle import portable_file_dialogs as pfd
@@ -423,6 +519,48 @@ class ChainKitGui:
     def open_saved(self):
         if self.last_save:
             self.load_disc(self.last_save["out"])
+
+    def ui_folder(self, U, imgui):
+        folder_src = bool(self.disc is not None and getattr(self.disc, "is_folder", False))
+        imgui.begin_disabled(folder_src)
+        imgui.set_next_item_width(-U.bw("Browse..."))
+        changed, v = imgui.input_text("##folder", self.folder_target() or "")
+        if changed and not folder_src:
+            self.set_folder(v)
+        imgui.same_line()
+        if imgui.button("Browse...##folder"):
+            self.pick_folder()
+        imgui.end_disabled()
+        info = self.folder_info()
+        if info is None:
+            U.text(GREY, "Choose an empty folder: ChainKit copies the game's files from your ISO into it once.")
+            return
+        if info["problem"]:
+            U.text(RED, info["problem"][0].upper() + info["problem"][1:] + ".")
+        elif info["plan"]:
+            plan = info["plan"]
+            if plan["extract_bytes"]:
+                U.text(GREY, "The game's files are copied from your ISO into this folder first (%.1f GB), then "
+                             "ChainKit writes its changes." % (plan["extract_bytes"] / 1e9))
+            if folder_src:
+                U.text(GREY, "Saving changes only the executable (and the arrow art) in this folder and rebuilds "
+                             "\"%s\"." % (core.GAME + hostfs.BOOT_SUFFIX))
+            else:
+                U.text(GREY, "The boot image \"%s\" is rebuilt on every save." % (core.GAME + hostfs.BOOT_SUFFIX))
+        if info["case_sensitive"]:
+            U.text(YELLOW, "! This folder is case-sensitive: the game asks for its files in other letter case and "
+                           "will not find them. Use a case-insensitive folder (Linux: e.g. ext4 with casefold). You "
+                           "can still save and try.")
+        U.text(GREY, "Stop the game in PCSX2 before you save into its folder.")
+
+    def ui_hostfs_steps(self, U, imgui):
+        if imgui.tree_node_ex("How to play it in PCSX2##hostfs", imgui.TreeNodeFlags_.default_open):
+            for line in getattr(self.disc, "steps", None) or []:
+                U.text(GREY, line)
+            if imgui.small_button("Copy the cheats link"):
+                imgui.set_clipboard_text(hostfs.NAHELAM_URL)
+            U.tip(hostfs.NAHELAM_URL)
+            imgui.tree_pop()
 
     # ------------------------------------------------------------------ dialogs
     def open_dialog(self, dlg, cb):
@@ -505,27 +643,36 @@ class ChainKitGui:
         # ---- 1
         U.step(1, "Select your Burnout Revenge ISO", self.disc is not None)
         imgui.begin_disabled(busy)
-        imgui.set_next_item_width(-U.bw("Browse..."))
+        imgui.set_next_item_width(-U.bw("Browse...", "Folder..."))
         changed, v = imgui.input_text("##iso", self.iso_path, imgui.InputTextFlags_.enter_returns_true)
         if changed:
             self.load_disc(v)
         imgui.same_line()
         if imgui.button("Browse...##iso"):
             self.pick_iso()
+        imgui.same_line()
+        if imgui.button("Folder...##isodir"):
+            self.pick_src_folder()
+        U.tip("Open a game folder for PCSX2 HostFS (made by MusicKit or ChainKit, step 3) to add the mod there or "
+              "change its settings.")
         imgui.end_disabled()
         if self.disc:
             d = self.disc
             U.text(GREEN, d.summary)
             for p in d.problems:
                 U.text(RED, "! " + p[0].upper() + p[1:])
+            if getattr(d, "is_folder", False):
+                U.text(GREY, "A game folder for PCSX2 HostFS: ChainKit saves into it (only the files it changes) "
+                             "and rebuilds \"%s\"." % (core.GAME + hostfs.BOOT_SUFFIX))
             if d.applied and d.values:
-                U.text(GREY, "Its settings are shown on the right: change them and save a new ISO - no need to "
+                U.text(GREY, "Its settings are shown on the right: change them and save again - no need to "
                              "start again from the original.")
             if d.applied and not d.musickit:
                 U.text(GREY, "Want MusicKit songs too? MusicKit cannot open an ISO that already has ChainKit: run "
                              "MusicKit on your ISO without the mod first, then ChainKit on MusicKit's new ISO.")
-            U.text(GREY, "Your ISO is only read; it is never changed. PCSX2 still recognises the game "
-                         "(CRC %08X kept), so widescreen and other patches keep working." % d.crc)
+            U.text(GREY, ("" if getattr(d, "is_folder", False) else "Your ISO is only read; it is never changed. ")
+                   + "PCSX2 still recognises the game (CRC %08X kept), so widescreen and other patches keep "
+                     "working." % d.crc)
         elif self.disc_error and not (busy and self.job.title == "open ISO"):
             U.text(RED if os.path.exists(self.iso_path or "") or self.iso_path else GREY, self.disc_error)
         U.text(GREY, "Europe (SLES-53507) or USA (SLUS-21242). With MusicKit: run MusicKit first, then ChainKit "
@@ -566,18 +713,28 @@ class ChainKitGui:
                              "from your Revenge ISO). ChainKit includes no game data.")
         # ---- 3
         U.step(3, "Save", bool(self.last_save and self.last_save["ok"]))
-        imgui.begin_disabled(busy)
-        if imgui.radio_button("Mod the ISO (new disc image)", self.output_type == "iso"):
+        folder_src = bool(self.disc is not None and getattr(self.disc, "is_folder", False))
+        imgui.begin_disabled(busy or folder_src)
+        if imgui.radio_button("Mod the ISO (new disc image)", self.output_type == "iso" and not folder_src):
             self.output_type = "iso"
         U.tip("Writes a new ISO with the mod: PCSX2 or a real PS2, Dominator's arrow art, texts in every language "
               "of your disc. Your ISO is never changed.")
         imgui.same_line()
-        if imgui.radio_button("PCSX2 cheat (.pnach)", self.output_type == "pnach"):
+        if imgui.radio_button("PCSX2 cheat (.pnach)", self.output_type == "pnach" and not folder_src):
             self.output_type = "pnach"
         U.tip("Writes a small cheat file for PCSX2 instead: no new ISO, switch it on or off in PCSX2's cheat list. "
               "PCSX2 only (not a real PS2), English pop-ups; Dominator's arrow only with your Dominator ISO (step 2), "
               "otherwise ChainKit's arrow.")
-        if self.output_type == "iso":
+        if imgui.radio_button("Folder for PCSX2 HostFS", self.to_folder()):
+            self.output_type = "folder"
+        U.tip("Writes the game's files into a folder instead (extracted once from your ISO) - PCSX2's Host "
+              "Filesystem loads them from there. Same result as the new ISO (texts in every language, Dominator's "
+              "arrow), later saves only rewrite the changed files. PCSX2 only, needs Nahelam's HostFS cheat.")
+        imgui.end_disabled()
+        imgui.begin_disabled(busy)
+        if self.to_folder():
+            self.ui_folder(U, imgui)
+        elif self.output_type == "iso":
             imgui.set_next_item_width(-U.bw("Browse..."))
             _, self.out_path = imgui.input_text("##out", self.out_path)
             imgui.same_line()
@@ -606,13 +763,15 @@ class ChainKitGui:
                     U.text(YELLOW, "This file exists already.")
                     _, self.pnach_replace = imgui.checkbox("Replace it", self.pnach_replace)
         imgui.end_disabled()
-        if self.output_type == "iso" and self.out_path and os.path.exists(self.out_path) and self.disc and \
+        if self.output_type == "iso" and not self.to_folder() and self.out_path and os.path.exists(self.out_path) \
+                and self.disc and \
                 os.path.abspath(self.out_path) != os.path.abspath(self.disc.path):
             U.text(YELLOW, "This file exists and will be replaced.")
         problem = self.save_problem()
         imgui.begin_disabled(problem is not None)
         imgui.push_style_color(imgui.Col_.button, U.col((0.1, 0.45, 0.75, 1.0)))
-        label = "Save new ISO" if self.output_type == "iso" else "Save PCSX2 cheat"
+        label = "Save to folder" if self.to_folder() else "Save new ISO" if self.output_type == "iso" else \
+            "Save PCSX2 cheat"
         if imgui.button(label, imgui.ImVec2(U.bw("  Save PCSX2 cheat  "), imgui.get_frame_height() * 1.6)):
             self.save()
         imgui.pop_style_color()
@@ -625,11 +784,17 @@ class ChainKitGui:
             n = len(self.changed_settings())
             U.text(GREY, "%d setting%s changed%s" % (n, "" if n == 1 else "s",
                                                     ", adds Dominator's arrow" if self.adds_arrow() else ""))
-        if self.job and (not self.job.done or self.job.title in ("save new ISO", "save PCSX2 cheat")):
+        if self.job and (not self.job.done or self.job.title in ("save new ISO", "save PCSX2 cheat", "save to folder")):
             imgui.progress_bar(self.job.progress if not self.job.done else 1.0, imgui.ImVec2(-1, 0),
                                self.job.message if not self.job.done else ("done" if self.job.ok else "failed"))
         if self.last_save and not busy:
-            if self.last_save["ok"] and self.last_save.get("pnach"):
+            if self.last_save["ok"] and self.last_save.get("folder"):
+                U.text(GREEN, "Saved into and checked: %s" % self.last_save["out"])
+                if not (self.disc and getattr(self.disc, "is_folder", False)):
+                    if imgui.button("Open this folder here (to change its settings)"):
+                        self.open_saved()
+                self.ui_hostfs_steps(U, imgui)
+            elif self.last_save["ok"] and self.last_save.get("pnach"):
                 U.text(GREEN, "Saved: %s" % self.last_save["out"])
             elif self.last_save["ok"]:
                 U.text(GREEN, "Saved and checked: %s" % self.last_save["out"])

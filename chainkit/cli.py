@@ -3,12 +3,15 @@
   build    --iso SRC.iso [--out NEW.iso] [--dominator DOMINATOR.iso] [--preset NAME] [--settings FILE.json]
            [--set NAME=VALUE ...]                         new ISO with the mod (your ISO is only read)
            [--output-type pnach --out-dir DIR]            ... or a PCSX2 cheat instead (same as 'pnach')
+           [--folder DIR]                                 ... or into a game folder for PCSX2's Host Filesystem
+                                                          (--iso may be such a folder: it is saved into itself)
   pnach    --iso SRC.iso [--iso OTHER.iso] [--out-dir DIR] [--region pal|usa|both] [--force]
            [--check-with OTHER.pnach ...] [--preset/--settings/--set]
                                                           PCSX2 cheat <SERIAL>_<CRC>_chainkit.pnach (no disc change)
   pnach-check FILE.pnach --with OTHER.pnach ...          addresses two cheats both write
   tune     SRC.iso NEW.iso [--preset/--settings/--set] [--dominator ...]
                                                           new ISO = an ISO that has the mod, with other settings
+                                                          (SRC = NEW = a HostFS folder: saved into itself)
   validate SRC.iso NEW.iso [--dominator DOMINATOR.iso] [--quick]
   info     ISO                                            what is on an ISO (mod? settings? other kits?)
   settings [ISO] [--raw]                                  every setting (with the values of ISO)
@@ -80,9 +83,17 @@ def _value_args(p):
     p.add_argument("--dominator", metavar="DOMINATOR.iso", help="your Burnout Dominator ISO (arrow art)")
 
 
+def _hostfs_steps(src, folder):
+    with core.Disc(folder) as d:
+        print("Play it in PCSX2:")
+        for line in d.hostfs_steps(folder):
+            print("  " + line)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="chainkit", description="Burnout Dominator's supercharge and Burnout chain for "
-                                 "Burnout Revenge (PS2, Europe and USA). Always writes a new ISO.")
+                                 "Burnout Revenge (PS2, Europe and USA). Writes a new ISO, a PCSX2 cheat or a "
+                                 "PCSX2 HostFS folder.")
     sub = ap.add_subparsers(dest="cmd")
     p = sub.add_parser("build", help="new ISO with the mod")
     p.add_argument("--iso", required=True); p.add_argument("--out"); _value_args(p)
@@ -92,6 +103,7 @@ def main(argv=None):
     p.add_argument("--out-dir", help="folder for the cheat file (pnach; default: the ChainKit folder)")
     p.add_argument("--force", action="store_true", help="replace an existing cheat file")
     p.add_argument("--check-with", action="append", default=[], metavar="OTHER.pnach")
+    p.add_argument("--folder", metavar="DIR", help="save into this game folder for PCSX2 HostFS instead of a new ISO")
     p = sub.add_parser("pnach", help="PCSX2 cheat (.pnach) instead of a new ISO")
     p.add_argument("--iso", action="append", required=True, help="your ISO (Europe and/or USA; give it twice)")
     p.add_argument("--out-dir", help="folder for the cheat file(s) (default: the ChainKit folder)")
@@ -168,10 +180,16 @@ def _run(a, ap):
             bad += bool(hits)
         return 1 if bad else 0
     if a.cmd == "build":
-        out = a.out or core.default_output(a.iso)
+        if a.out and a.folder:
+            raise core.KitError("give --out (new ISO) or --folder (HostFS folder), not both")
+        folder = a.folder or (a.iso if os.path.isdir(a.iso) else None)
+        out = folder or a.out or core.default_output(a.iso)
         values = _values(a, settings.DEFAULTS)
-        core.build(a.iso, out, values, a.dominator, progress=_progress)
-        return 0 if a.no_validate or core.validate(a.iso, out, a.dominator) else 1
+        core.build(a.iso, out, values, a.dominator, progress=_progress, to_folder=bool(folder))
+        ok = a.no_validate or core.validate(a.iso, out, a.dominator, quick=os.path.isdir(a.iso))
+        if folder:
+            _hostfs_steps(a.iso, folder)
+        return 0 if ok else 1
     if a.cmd == "tune":
         with core.Disc(a.source) as d:
             if not d.values:
@@ -180,8 +198,12 @@ def _run(a, ap):
                 raise core.KitError("this ISO does not have the Burnout Chain mod yet - use 'build'")
             base = d.values
         values = _values(a, base)
-        core.tune(a.source, a.output, values, a.dominator, progress=_progress)
-        return 0 if a.no_validate or core.validate(a.source, a.output, a.dominator) else 1
+        folder = os.path.isdir(a.source) or os.path.isdir(a.output)
+        core.tune(a.source, a.output, values, a.dominator, progress=_progress, to_folder=folder)
+        ok = a.no_validate or core.validate(a.source, a.output, a.dominator, quick=os.path.isdir(a.source))
+        if folder:
+            _hostfs_steps(a.output, a.output)
+        return 0 if ok else 1
     if a.cmd == "validate":
         return 0 if core.validate(a.source, a.output, a.dominator, quick=a.quick) else 1
     if a.cmd == "info":

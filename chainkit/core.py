@@ -1,18 +1,19 @@
 """ChainKit core: put the Burnout Chain mod (Burnout Dominator's supercharge and Burnout chain) on a Burnout Revenge
 ISO (Europe SLES-53507 or USA SLUS-21242), change the settings of an ISO that already has it, check the result.
 
-Always writes a NEW image (the source is only read):
+Writes a NEW image (the source is only read), or saves into a game folder for PCSX2's Host Filesystem (hostfs.py):
     boot ELF            code + data in the top of the unused .sndata hole, hooks, PCSX2 CRC kept (elfpatch)
     MAIN{UK,FR,GE,US}.BIN  the HUD message texts (assets.TEXTS)
     DATA/GLOBAL.TXD     Dominator's Boost_Arrow in place of the online TalkIcon (same size and format) when you give
                         your own Burnout Dominator image; without it ChainKit's arrow (Revenge's chevron slash
                         repainted, made from your own disc - arrowart.py) in the same place
 Works on the original disc and on MusicKit output and discs with changed car code (run MusicKit before ChainKit).
+A HostFS game folder (made by MusicKit or ChainKit) can be the source too; it is then saved into itself.
 """
 import hashlib
 import os
 
-from . import assets, cave, elfpatch, iso, regions, settings
+from . import assets, cave, elfpatch, hostfs, iso, regions, settings
 from .elf import Elf, crc
 
 PAL_ELF = regions.PAL["elf"]
@@ -23,6 +24,8 @@ SLOT_DOMINATOR, SLOT_CHEVRON = 28, 12
 # MusicKit: playlist struct, original song table (PAL addresses, translated per build), 41 original songs
 MK_PLAYLIST, MK_TABLE_OLD, MK_SONGS = 0x460640, 0x460450, 41
 CAR_CODE_SITE = 0x134D68               # car mods change the 4 words from here (PAL address)
+GAME = "Burnout Revenge"               # HostFS boot image "Burnout Revenge (HostFS).iso" (the same name as MusicKit's)
+NAHELAM_DIR = "Burnout Revenge"        # folder of the HostFS cheats for this game in Nahelam's repository
 
 
 class KitError(Exception):
@@ -32,6 +35,11 @@ class KitError(Exception):
 def default_output(src, tag="Burnout Chain"):
     base, ext = os.path.splitext(src)
     return base + " (%s)" % tag + (ext or ".iso")
+
+
+def default_folder(src):
+    """Suggested HostFS folder for the ISO `src`: next to it, "<iso name> (HostFS)"."""
+    return os.path.splitext(os.path.abspath(src))[0] + " (HostFS)"
 
 
 def boot_elf(img):
@@ -47,6 +55,11 @@ def boot_elf(img):
 def _open(path, what="ISO"):
     if not path:
         raise KitError("no %s chosen" % what)
+    if what == "ISO" and os.path.isdir(path):
+        try:
+            return hostfs.FolderImage(path)
+        except Exception as exc:
+            raise KitError("%s is not a game folder (%s)" % (path, exc))
     if not os.path.isfile(path):
         raise KitError("%s not found: %s" % (what, path))
     try:
@@ -77,6 +90,7 @@ class Disc:
     def __init__(self, path):
         self.path = path
         self.img = _open(path)
+        self.is_folder = getattr(self.img, "is_folder", False)
         try:
             self.elf_path = boot_elf(self.img)
             if self.elf_path not in REVENGE_ELFS or self.elf_path not in self.img.entries:
@@ -138,6 +152,10 @@ class Disc:
         except Exception:
             pass
 
+    def hostfs_steps(self, folder=None):
+        """How to play a HostFS folder in PCSX2 (numbered steps)."""
+        return hostfs.instructions(GAME, NAHELAM_DIR, self.elf_path, self.crc, folder)
+
     def __enter__(self):
         return self
 
@@ -190,11 +208,90 @@ def _check_out(src, out):
         raise KitError("folder not found: %s" % d)
 
 
-def build(src, out, values=None, dominator=None, log=print, progress=None):
-    """New image with the mod. values = settings dict (missing = defaults). Returns the values written."""
-    _check_out(src, out)
+def _check_folder(d, folder):
+    """KitError when `folder` cannot receive the game of `d`: a folder opened as the source is saved into itself;
+    an ISO goes into an empty folder or a folder with the same game whose executable is still the ISO's (a folder
+    with MusicKit songs or ChainKit already: open that folder instead, so nothing is lost)."""
+    if not folder:
+        raise KitError("choose the folder for PCSX2 HostFS")
+    folder = os.path.abspath(folder)
+    if d.is_folder:
+        if os.path.normcase(folder) != os.path.normcase(os.path.abspath(d.path)):
+            raise KitError("an opened folder is saved into itself (to fill another folder, open your ISO)")
+        return
+    if os.path.isfile(folder):
+        raise KitError("this is a file - choose a folder")
+    if os.path.isdir(folder) and os.listdir(folder):
+        if not hostfs.is_game_folder(folder):
+            raise KitError("this folder has other files: choose an empty folder or a folder with the game's files")
+        img = hostfs.FolderImage(folder)
+        elf = hostfs.boot_elf(img.read_file("/SYSTEM.CNF"))
+        if elf != d.elf_path:
+            raise KitError("this folder has another game or version (%s, not %s)" % ((elf or "?").strip("/"),
+                                                                                       d.elf_path.strip("/")))
+        if elf in img.entries and img.read_file(elf) != d.elf:
+            raise KitError("this folder already has changes (MusicKit songs or ChainKit): open the folder in step 1 "
+                           "to add or change the mod there")
+
+
+def folder_plan(src, folder):
+    """{"extract_bytes": bytes still to copy from the ISO, "has_game": the folder has the game already}."""
+    with Disc(src) as d:
+        _check_folder(d, folder)
+        if d.is_folder:
+            return {"extract_bytes": 0, "has_game": True}
+        if not os.path.isdir(folder):
+            return {"extract_bytes": sum(e.size for e in d.img.entries.values()), "has_game": False}
+        return {"extract_bytes": hostfs.needed_bytes(d.img, folder), "has_game": hostfs.is_game_folder(folder)}
+
+
+def _changed_paths(d):
+    return {d.elf_path, assets.GLOBAL_TXD} | {assets.STRING_FILES[l] for l in d.langs}
+
+
+def _write(d, out, reps, progress, log, to_folder):
+    """Write `reps` as a new ISO `out`, or into the HostFS game folder `out` (+ its boot image)."""
+    if not to_folder:
+        d.img.build(out, reps, progress)
+        return
+    prog = progress or (lambda f, m: None)
+    folder = os.path.abspath(out)
+    if not d.is_folder:
+        hostfs.extract(d.img, folder, lambda f, m: prog(0.8 * f, m), skip=reps)
+    try:
+        hostfs.write_files(folder, reps, lambda f, m: prog(0.8 + 0.18 * f, m),
+                           extra_locked=[hostfs.boot_iso_path(folder, GAME)])
+        boot = hostfs.write_boot_iso(folder, GAME)
+    except hostfs.HostFSError as exc:
+        raise KitError(str(exc))
+    log("folder: %s (%s), boot image %s" % (folder, ", ".join(p.lstrip("/") for p in sorted(reps)),
+                                             os.path.basename(boot)))
+    prog(1.0, "done")
+
+
+def _early_lock_check(d, out, to_folder):
+    """Refuse before any work when the game runs from that folder (its files are in use)."""
+    if not to_folder:
+        return
+    _check_folder(d, out)
+    folder = os.path.abspath(out)
+    if os.path.isdir(folder):
+        img = hostfs.FolderImage(folder) if hostfs.is_game_folder(folder) else None
+        try:
+            hostfs.check_unlocked([hostfs.boot_iso_path(folder, GAME)] +
+                                  [hostfs.host_path(folder, p, img) for p in sorted(_changed_paths(d))])
+        except hostfs.HostFSError as exc:
+            raise KitError(str(exc))
+
+
+def build(src, out, values=None, dominator=None, log=print, progress=None, to_folder=False):
+    """New image with the mod (or into the HostFS game folder `out`). values = settings dict (missing = defaults).
+    Returns the values written."""
+    if not to_folder:
+        _check_out(src, out)
     values = settings.check(values)
     with Disc(src) as d:
+        _early_lock_check(d, out, to_folder)
         for p in d.problems():
             raise KitError(p)
         if d.applied:
@@ -221,17 +318,19 @@ def build(src, out, values=None, dominator=None, log=print, progress=None):
         log("HUD texts: %s" % ", ".join(d.langs))
         if txd:
             reps[assets.GLOBAL_TXD] = txd
-        d.img.build(out, reps, progress)
+        _write(d, out, reps, progress, log, to_folder)
     log("saved %s" % out)
     return values
 
 
-def tune(src, out, values, dominator=None, log=print, progress=None):
+def tune(src, out, values, dominator=None, log=print, progress=None, to_folder=False):
     """New image = `src` (which has the mod) with other settings. Only the executable changes (and the arrow art,
     when a Dominator image is given for an image that does not have it yet). Returns the values written."""
-    _check_out(src, out)
+    if not to_folder:
+        _check_out(src, out)
     values = settings.check(values)
     with Disc(src) as d:
+        _early_lock_check(d, out, to_folder)
         for p in d.problems():
             raise KitError(p)
         if not d.applied:
@@ -250,16 +349,18 @@ def tune(src, out, values, dominator=None, log=print, progress=None):
             reps[d.elf_path] = elfpatch.tune(d.elf, values)
         except elfpatch.ChainError as exc:
             raise KitError(str(exc))
-        d.img.build(out, reps, progress)
+        _write(d, out, reps, progress, log, to_folder)
     log("saved %s" % out)
     return values
 
 
-def save(src, out, values=None, dominator=None, log=print, progress=None):
-    """build() or tune(), whichever fits the source image."""
+def save(src, out, values=None, dominator=None, log=print, progress=None, to_folder=False):
+    """build() or tune(), whichever fits the source image. to_folder: `out` is a HostFS game folder (see
+    hostfs.py); a folder opened as `src` is always saved into itself."""
     with Disc(src) as d:
         applied = d.applied
-    return (tune if applied else build)(src, out, values, dominator, log, progress)
+        to_folder = to_folder or d.is_folder
+    return (tune if applied else build)(src, out, values, dominator, log, progress, to_folder)
 
 
 def _sha(img, path):
@@ -277,11 +378,24 @@ def _sha(img, path):
 
 
 def validate(src, out, dominator=None, log=print, quick=False):
-    """Check a saved image against the image it was made from. Returns True when everything is OK."""
+    """Check a saved image (or HostFS folder) against the image it was made from (src = out for a folder saved into
+    itself: only the mod is checked). Returns True when everything is OK."""
     ok = True
     s, o = Disc(src), None
     try:
         o = Disc(out)
+        if o.is_folder:
+            boot = hostfs.boot_iso_path(out, GAME)
+            good = os.path.isfile(boot)
+            if good:
+                b = iso.IsoImage(boot)
+                try:
+                    good = b.read_file(o.elf_path) == o.elf and b.read_file("/SYSTEM.CNF") == o.img.read_file(
+                        "/SYSTEM.CNF")
+                finally:
+                    b.f.close()
+            log("boot image %s: %s" % (os.path.basename(boot), "OK" if good else "MISSING or DIFFERENT"))
+            ok &= good
         probs = elfpatch.check(o.elf, log)
         log("executable: %s" % ("OK" if not probs else "%d problem(s)" % len(probs)))
         ok &= not probs
