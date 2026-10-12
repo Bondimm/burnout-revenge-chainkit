@@ -715,11 +715,16 @@ class ChainKitGui:
         U.step(3, "Save", bool(self.last_save and self.last_save["ok"]))
         folder_src = bool(self.disc is not None and getattr(self.disc, "is_folder", False))
         imgui.begin_disabled(busy or folder_src)
+        avail = imgui.get_content_region_avail().x
         if imgui.radio_button("Mod the ISO (new disc image)", self.output_type == "iso" and not folder_src):
             self.output_type = "iso"
         U.tip("Writes a new ISO with the mod: PCSX2 or a real PS2, Dominator's arrow art, texts in every language "
               "of your disc. Your ISO is never changed.")
-        imgui.same_line()
+        style = imgui.get_style()
+        cheat_w = (imgui.calc_text_size("PCSX2 cheat (.pnach)").x + imgui.get_frame_height()
+                   + style.item_inner_spacing.x)
+        if imgui.get_item_rect_size().x + style.item_spacing.x + cheat_w <= avail:
+            imgui.same_line()               # on one line only when the second label fits (narrow window: next line)
         if imgui.radio_button("PCSX2 cheat (.pnach)", self.output_type == "pnach" and not folder_src):
             self.output_type = "pnach"
         U.tip("Writes a small cheat file for PCSX2 instead: no new ISO, switch it on or off in PCSX2's cheat list. "
