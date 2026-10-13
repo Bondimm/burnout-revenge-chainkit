@@ -26,6 +26,12 @@ MK_PLAYLIST, MK_TABLE_OLD, MK_SONGS = 0x460640, 0x460450, 41
 CAR_CODE_SITE = 0x134D68               # car mods change the 4 words from here (PAL address)
 GAME = "Burnout Revenge"               # HostFS boot image "Burnout Revenge (HostFS).iso" (the same name as MusicKit's)
 NAHELAM_DIR = "Burnout Revenge"        # folder of the HostFS cheats for this game in Nahelam's repository
+# a game folder must have these (directory: at least that many files, about 60% of the disc's; "/FILE": that file),
+# else it is an incompletely extracted folder
+REQUIRED = {"CNF": 1, "DATA": 6, "FE": 30, "IOP": 20, "LANGUAGE": 3, "OVID": 40, "PVEH": 160, "SOUND": 40, "TRACKS": 150,
+            "/IOP/GTFSHOST.IRX": 1}
+KEEP_HINT = ("To keep those changes, open this folder in step 1 (\"Folder...\", or --iso <folder>) and add or "
+             "change the mod there; or choose an empty folder to start again from your ISO.")
 
 
 class KitError(Exception):
@@ -91,6 +97,11 @@ class Disc:
         self.path = path
         self.img = _open(path)
         self.is_folder = getattr(self.img, "is_folder", False)
+        if self.is_folder:
+            missing = hostfs.missing_parts(self.img, REQUIRED)
+            if missing:
+                self.close()
+                raise KitError(hostfs.incomplete_message(missing))
         try:
             self.elf_path = boot_elf(self.img)
             if self.elf_path not in REVENGE_ELFS or self.elf_path not in self.img.entries:
@@ -182,12 +193,31 @@ def dominator_txd(path):
     raise KitError("no Boost_Arrow texture found - is this a Burnout Dominator disc image?")
 
 
-def _arrow(disc, dominator, log):
+def _base(d, out, to_folder):
+    """Where ChainKit reads the texts and textures it changes: the folder itself when an ISO is saved into a folder
+    that already has the game (_check_folder made sure its executable is the ISO's, so other differences there are
+    other mods' texts or textures - they are kept), else the source."""
+    if to_folder and not d.is_folder and hostfs.is_game_folder(out):
+        return hostfs.FolderImage(out)
+    return d.img
+
+
+def _read(d, base, path, log):
+    """File `path` from `base` (see _base), or from the source when `base` does not have it."""
+    if base is d.img or path not in base.entries:
+        return d.img.read_file(path)
+    data = base.read_file(path)
+    if data != d.img.read_file(path):
+        log("kept another mod's changes in the folder's %s" % path.lstrip("/"))
+    return data
+
+
+def _arrow(disc, dominator, log, base=None):
     """GLOBAL.TXD with Dominator's arrow (None without a Dominator image or when the image already has it)."""
     if not dominator:
         return None
     dtxd = dominator_txd(dominator)
-    txd = disc.img.read_file(assets.GLOBAL_TXD)
+    txd = _read(disc, base or disc.img, assets.GLOBAL_TXD, log)
     if assets.arrow_merged(txd, dtxd):
         return None
     try:
@@ -223,15 +253,18 @@ def _check_folder(d, folder):
         raise KitError("this is a file - choose a folder")
     if os.path.isdir(folder) and os.listdir(folder):
         if not hostfs.is_game_folder(folder):
-            raise KitError("this folder has other files: choose an empty folder or a folder with the game's files")
-        img = hostfs.FolderImage(folder)
+            raise KitError(hostfs.not_a_game_folder(folder))
+        try:
+            img = hostfs.FolderImage(folder)
+        except ValueError as exc:
+            raise KitError(str(exc))
         elf = hostfs.boot_elf(img.read_file("/SYSTEM.CNF"))
         if elf != d.elf_path:
             raise KitError("this folder has another game or version (%s, not %s)" % ((elf or "?").strip("/"),
                                                                                        d.elf_path.strip("/")))
         if elf in img.entries and img.read_file(elf) != d.elf:
-            raise KitError("this folder already has changes (MusicKit songs or ChainKit): open the folder in step 1 "
-                           "to add or change the mod there")
+            raise KitError("this folder already has changes in the game executable (MusicKit songs, ChainKit or "
+                           "another mod): saving your ISO into it would remove them. " + KEEP_HINT)
 
 
 def folder_plan(src, folder):
@@ -266,6 +299,9 @@ def _write(d, out, reps, progress, log, to_folder):
         raise KitError(str(exc))
     log("folder: %s (%s), boot image %s" % (folder, ", ".join(p.lstrip("/") for p in sorted(reps)),
                                              os.path.basename(boot)))
+    hint = hostfs.boot_hint(folder, GAME)
+    if hint:
+        log(hint)
     prog(1.0, "done")
 
 
@@ -297,10 +333,15 @@ def build(src, out, values=None, dominator=None, log=print, progress=None, to_fo
         if d.applied:
             raise KitError("this ISO already has the Burnout Chain mod - open it to change its settings")
         log("source: %s (%s)" % (os.path.basename(src), d.summary()))
-        txd = _arrow(d, dominator, log)
+        base = _base(d, out, to_folder)
+        txd = _arrow(d, dominator, log, base)
         if not txd:
             from . import arrowart
-            txd = arrowart.merge(d.img.read_file(assets.GLOBAL_TXD))
+            try:
+                txd = arrowart.merge(_read(d, base, assets.GLOBAL_TXD, log))
+            except Exception as exc:
+                raise KitError("cannot put the arrow texture into GLOBAL.TXD (%s) - was it changed by another mod?"
+                               % exc)
             log("arrow texture: ChainKit's arrow (Revenge's chevron slash repainted, made from your disc)")
         values["arrow_tex_slot"] = SLOT_DOMINATOR
         reps = {}
@@ -314,7 +355,10 @@ def build(src, out, values=None, dominator=None, log=print, progress=None, to_fo
             "" if rep["hole_opened"] else " (reuses the space MusicKit opened)"))
         for lang in d.langs:
             p = assets.STRING_FILES[lang]
-            reps[p] = assets.add_strings(d.img.read_file(p), lang)
+            try:
+                reps[p] = assets.add_strings(_read(d, base, p, log), lang)
+            except ValueError as exc:
+                raise KitError("%s: %s" % (p.lstrip("/"), exc))
         log("HUD texts: %s" % ", ".join(d.langs))
         if txd:
             reps[assets.GLOBAL_TXD] = txd
@@ -337,7 +381,7 @@ def tune(src, out, values, dominator=None, log=print, progress=None, to_folder=F
             raise KitError("this ISO does not have the Burnout Chain mod yet - save a new ISO with the mod first")
         log("source: %s (%s)" % (os.path.basename(src), d.summary()))
         reps = {}
-        txd = _arrow(d, dominator, log)
+        txd = _arrow(d, dominator, log, _base(d, out, to_folder))
         if txd:
             reps[assets.GLOBAL_TXD] = txd
             values["arrow_tex_slot"] = SLOT_DOMINATOR
@@ -416,12 +460,17 @@ def validate(src, out, dominator=None, log=print, quick=False):
             if art == "chainkit":
                 from . import arrowart
                 good = arrowart.is_chainkit(o.img.read_file(assets.GLOBAL_TXD), s.img.read_file(assets.GLOBAL_TXD))
+                if not good and o.is_folder and arrowart.is_chainkit(o.img.read_file(assets.GLOBAL_TXD)):
+                    log("note: ChainKit's arrow was made from the folder's GLOBAL.TXD (changed by another mod)")
+                    good = True
                 log("ChainKit arrow texture: %s" % ("OK" if good else "DIFFERENT"))
                 ok &= good
-        if s.musickit or o.musickit:
+        if s.musickit:
             kept = s.songs == o.songs and o.musickit == s.musickit
             log("MusicKit song list: %s" % ("kept (%d songs)" % o.songs if kept else "CHANGED"))
             ok &= kept
+        elif o.musickit:          # MusicKit saved into the folder after it was made from `src`
+            log("MusicKit song list: %d songs (added by MusicKit, not on %s)" % (o.songs, os.path.basename(src)))
         if o.music_broken:
             log("MusicKit song list: BROKEN (MusicKit was run after ChainKit)")
             ok = False
@@ -431,18 +480,36 @@ def validate(src, out, dominator=None, log=print, quick=False):
             log("missing files: %s" % ", ".join(missing[:5]))
             ok = False
         if not quick:
-            same = diff = 0
+            same, other = 0, []
             for k, e in s.img.entries.items():
                 if k in changed or k not in o.img.entries or k.endswith("/"):
                     continue
                 if e.size == o.img.entries[k].size and _sha(s.img, k) == _sha(o.img, k):
                     same += 1
+                elif o.is_folder and not s.is_folder:
+                    other.append(k)             # another mod's file in the folder (ChainKit never writes it)
                 else:
-                    diff += 1
-                    if diff <= 5:
+                    other.append(k)
+                    if len(other) <= 5:
                         log("changed unexpectedly: %s" % k)
-            log("untouched files identical: %d (%d differ)" % (same, diff))
-            ok &= diff == 0
+            log("untouched files identical: %d (%d differ)" % (same, len(other)))
+            if o.is_folder and not s.is_folder:
+                songs = [k for k in other if k.startswith("/TRACKS/") and "EATRAX" in k]
+                other = [k for k in other if k not in songs]
+                if songs:
+                    log("note: %s: MusicKit's songs" % hostfs.short_list(songs))
+                if other:
+                    log("note: %d file%s differ from %s but ChainKit does not manage %s (another mod's files, kept as "
+                        "they are): %s" % (len(other), "" if len(other) == 1 else "s", os.path.basename(src),
+                                           "it" if len(other) == 1 else "them", hostfs.short_list(other)))
+            else:
+                ok &= not other
+        if o.is_folder and not s.is_folder:
+            added = sorted(e.path for k, e in o.img.entries.items() if k not in s.img.entries)
+            if added:
+                log("note: %d file%s in the folder %s not on %s (another mod's or your own, kept as they are): %s"
+                    % (len(added), "" if len(added) == 1 else "s", "is" if len(added) == 1 else "are",
+                       os.path.basename(src), hostfs.short_list(added)))
         if o.values:
             p = settings.preset_of(o.values)
             n = len([x for x in settings.changed(o.values) if x != "arrow_tex_slot"])

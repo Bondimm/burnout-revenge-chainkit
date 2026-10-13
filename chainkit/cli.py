@@ -26,7 +26,7 @@ import json
 import os
 import sys
 
-from . import cave, core, settings
+from . import cave, core, hostfs, settings
 
 
 def _parse_set(items):
@@ -184,6 +184,8 @@ def _run(a, ap):
             raise core.KitError("give --out (new ISO) or --folder (HostFS folder), not both")
         folder = a.folder or (a.iso if os.path.isdir(a.iso) else None)
         out = folder or a.out or core.default_output(a.iso)
+        if folder and hostfs.case_warning(folder):
+            print("! " + hostfs.case_warning(folder))
         values = _values(a, settings.DEFAULTS)
         core.build(a.iso, out, values, a.dominator, progress=_progress, to_folder=bool(folder))
         ok = a.no_validate or core.validate(a.iso, out, a.dominator, quick=os.path.isdir(a.iso))
@@ -212,7 +214,8 @@ def _run(a, ap):
             for p in d.problems():
                 print("PROBLEM: " + p)
             if d.applied and not d.musickit:
-                print("note: to add MusicKit songs, run MusicKit on the ISO without ChainKit first, then ChainKit")
+                print("note: MusicKit can add songs to it (a MusicKit from October 2026 or newer; with an older one run "
+                      "MusicKit first, then ChainKit)")
             if d.values:
                 print("arrow art: %s" % {"dominator": "Burnout Dominator", "chainkit": "ChainKit's arrow",
                                          "chevron": "Revenge's chevron"}.get(d.arrow_art, "-"))

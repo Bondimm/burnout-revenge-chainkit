@@ -474,7 +474,8 @@ class ChainKitGui:
             job.update(0.7, "checking the folder")
             self.log("checking the folder%s ..." % ("" if same else " (compares every file with your ISO)"))
             ok = core.validate(src if not same else folder, folder, dom, self.log, quick=same)
-            self.last_save = {"out": folder, "ok": ok, "values": done, "folder": True}
+            self.last_save = {"out": folder, "ok": ok, "values": done, "folder": True,
+                              "boot_hint": hostfs.boot_hint(folder, core.GAME)}
             if not ok:
                 raise core.KitError("the check of the folder FAILED - see the log above")
             if same:                   # read the folder again: its files changed
@@ -668,15 +669,15 @@ class ChainKitGui:
                 U.text(GREY, "Its settings are shown on the right: change them and save again - no need to "
                              "start again from the original.")
             if d.applied and not d.musickit:
-                U.text(GREY, "Want MusicKit songs too? MusicKit cannot open an ISO that already has ChainKit: run "
-                             "MusicKit on your ISO without the mod first, then ChainKit on MusicKit's new ISO.")
+                U.text(GREY, "Want MusicKit songs too? Open this ISO or folder in MusicKit (October 2026 or newer; "
+                             "with an older MusicKit run it on your ISO first, then ChainKit on its new ISO).")
             U.text(GREY, ("" if getattr(d, "is_folder", False) else "Your ISO is only read; it is never changed. ")
                    + "PCSX2 still recognises the game (CRC %08X kept), so widescreen and other patches keep "
                      "working." % d.crc)
         elif self.disc_error and not (busy and self.job.title == "open ISO"):
             U.text(RED if os.path.exists(self.iso_path or "") or self.iso_path else GREY, self.disc_error)
-        U.text(GREY, "Europe (SLES-53507) or USA (SLUS-21242). With MusicKit: run MusicKit first, then ChainKit "
-                     "on its new ISO.")
+        U.text(GREY, "Europe (SLES-53507) or USA (SLUS-21242). With MusicKit: either kit first, then the other one on "
+                     "its new ISO or folder.")
         # ---- 2
         U.step(2, "Arrow art: ChainKit's arrow, or Dominator's from your own disc (optional)", self.dom_ok)
         U.text(GREY, "Optional - you do not need Burnout Dominator. It only changes how the 16 arrows look; the "
@@ -795,6 +796,8 @@ class ChainKitGui:
         if self.last_save and not busy:
             if self.last_save["ok"] and self.last_save.get("folder"):
                 U.text(GREEN, "Saved into and checked: %s" % self.last_save["out"])
+                if self.last_save.get("boot_hint"):
+                    U.text(YELLOW, "! " + self.last_save["boot_hint"])
                 if not (self.disc and getattr(self.disc, "is_folder", False)):
                     if imgui.button("Open this folder here (to change its settings)"):
                         self.open_saved()

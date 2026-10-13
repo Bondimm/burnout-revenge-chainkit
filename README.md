@@ -140,13 +140,14 @@ language of your disc, ChainKit's or Dominator's arrow):
 - the first save copies the game's files from your ISO into the folder (once, about 2.5 GB);
 - later saves (other settings) only rewrite the files ChainKit changes — the game executable, and the arrow art if
   you add Dominator's — no 4 GB ISO each time;
-- **with MusicKit:** save your songs into a folder with MusicKit first, then open **that folder** in ChainKit
-  (step 1, **Folder...**) and save the mod into it. Both kits keep each other's changes. ChainKit refuses to save
-  your ISO over a folder that already has MusicKit songs or the mod (that would lose them).
+- **with MusicKit:** save with one kit, then open **that folder** in the other kit (step 1, **Folder...**) and
+  save there — in either order. Both kits keep each other's changes. ChainKit refuses to save your ISO over a
+  folder that already has MusicKit songs or the mod (that would lose them).
 
 PCSX2 only (not a real PS2). The Criterion games need a small PCSX2 cheat to read from a folder:
-**Nahelam's HostFS patches** — thanks to [Nahelam](https://github.com/Nahelam) for making them. ChainKit does not
-include that cheat; you download it once.
+**Nahelam's HostFS patches** ([PCSX2-HostFS-Patches](https://github.com/Nahelam/PCSX2-HostFS-Patches), folder
+[Criterion Games](https://github.com/Nahelam/PCSX2-HostFS-Patches/tree/main/Criterion%20Games)) — thanks to
+[Nahelam](https://github.com/Nahelam) for making them. ChainKit does not include that cheat; you download it once.
 
 ### Save into a folder
 1. Select your ISO in step 1 — or a game folder with **Folder...** (made by MusicKit or ChainKit; it is then saved
@@ -185,6 +186,34 @@ then refuses to save (nothing is changed) and tells you why; restart the game af
 works in a case-insensitive folder — on ext4 for example an empty folder with casefold switched on (`chattr +F`,
 needs a file system created with casefold support). ChainKit warns when the folder is case-sensitive but still lets
 you save and try. Windows and macOS (default file system) need nothing special.
+
+### Other mods in the same folder
+
+- **MusicKit + ChainKit:** both kits save into the same folder, **in either order**: save with one kit, then open
+  the folder in the other kit (step 1, **Folder...**, or `--iso "<folder>"`) and save there. Saving again later
+  in either kit keeps the other kit's changes (songs, supercharge settings, pop-up texts, arrow).
+- **Saving your ISO into a folder that already has the game** works while the game executable there is still the
+  ISO's (ChainKit then adds the mod on top of the folder's texts and textures). When the executable was changed
+  (MusicKit songs, the mod itself or another mod), ChainKit refuses (nothing is changed) and tells you to open
+  the folder instead (or to pick an empty folder to start again from your ISO).
+- **Other people's file mods** (replaced cars, textures, videos, extra files) are never touched: ChainKit writes only
+  the files it manages. Texts other mods changed in the game's text files are kept too. `validate` lists such
+  files as notes, not as errors.
+- **PCSX2 cheats** (widescreen and other patches) keep working: the game CRC stays the same. The per-game
+  *HostFS* cheat is only for the folder — **untick it** before you start a normal ISO of the same game
+  (with it on, the ISO does not start).
+- ChainKit's **PCSX2 cheat** also works with a MusicKit folder (make the cheat from that folder:
+  `pnach --iso "<folder>"`); do not use it on a folder that already has the mod.
+- **Folders made by other tools** work: a folder extracted with 7-Zip, or set up as in Nahelam's guide (your own ISO
+  inside the folder). Start `Burnout Revenge (HostFS).iso` then — your own ISO in the folder still starts the game's
+  original executable, without ChainKit's changes to it. ChainKit explains what to do when names still end in `;1`
+  (extract again with 7-Zip), when you picked the folder above the game's files, or when files are missing (an
+  unfinished extraction: save from your ISO into the folder and the missing files are copied).
+
+Tested in PCSX2 2.8 (Europe discs, Burnout Revenge also USA): songs that exist only in the folder play from the folder
+in menus and races (the boot image holds only `SYSTEM.CNF` and the executable); MusicKit + ChainKit in both orders
+with supercharge, arrows and SUPERCHARGE LOST, a memory card save and the widescreen patch; other mods' files and
+texts stayed unchanged through every save.
 
 Command line ([optional](#command-line-optional)): `build --iso "Burnout Revenge (Europe).iso" --folder "<folder>"`
 saves into a folder; `build --iso "<folder>"` puts the mod into a folder (e.g. MusicKit's) and
@@ -353,11 +382,11 @@ MusicKit songs are kept, and every other file is byte-identical to your ISO.
 
 ## Works with MusicKit
 
-- **MusicKit:** run [MusicKit](https://github.com/Bondimm/burnout-revenge-musickit) **first**, then ChainKit on
-  MusicKit's new image. ChainKit uses the top of the free space that MusicKit opens for its song list; both fit.
-  MusicKit cannot open an image that already has ChainKit — if you want both, start again from your ISO without
-  ChainKit (your ChainKit settings: **Save…** them first, then **Load…** them again). ChainKit shows a clear
-  message if an image has a song list broken by a tool run after ChainKit.
+- **MusicKit:** run [MusicKit](https://github.com/Bondimm/burnout-revenge-musickit) and ChainKit in either order,
+  each on the other's new image (or HostFS folder). ChainKit uses the top of the free space that MusicKit opens
+  for its song list; both fit. Older MusicKit versions (before October 2026) cannot open an image that already
+  has ChainKit — update MusicKit, or run MusicKit first. ChainKit shows a clear message if an image has a song
+  list broken by an old tool run after ChainKit.
 ## FAQ
 
 **PCSX2 says the dump is not in the redump database / the MD5 is red.** That is expected for *any* modified disc

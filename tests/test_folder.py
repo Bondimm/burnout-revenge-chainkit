@@ -20,6 +20,13 @@ quiet = lambda *a: None   # noqa: E731
 needs_iso = pytest.mark.skipif(not ISOS, reason="set CHAINKIT_ISO_PAL and/or CHAINKIT_ISO_USA")
 
 
+@pytest.fixture(autouse=True)
+def _mini_folders_ok(request, monkeypatch):
+    """The quick tests use folders with only the files the kit reads: skip the check for a complete game folder."""
+    if not request.node.name.startswith(("test_folder_end_to_end", "test_gui_folder_flow")):
+        monkeypatch.setattr(core, "REQUIRED", {})
+
+
 def _mini_folder(src, folder):
     """A game folder with only the files ChainKit reads and writes, copied from the disc image `src`."""
     img = iso.IsoImage(src)
@@ -128,6 +135,15 @@ def test_folder_end_to_end(tmp_path):
             core.save(src, folder, None, None, quiet, to_folder=True)
             first = time.time() - t
             assert core.validate(src, folder, log=quiet)
+            # other mods in the folder: a replaced file and an added file - notes only, kept by every save
+            with core.Disc(src) as d:
+                replaced = min((k for k in d.img.entries if k not in core._changed_paths(d)
+                                and d.img.entries[k].size > 4096), key=lambda k: d.img.entries[k].size)
+            hostfs.write_files(folder, {replaced: b"replaced by another mod", "/MODS/CAR.DAT": b"added"})
+            lines = []
+            assert core.validate(src, folder, log=lines.append)
+            assert any(x.startswith("note:") and replaced.lstrip("/") in x for x in lines)
+            assert any(x.startswith("note:") and "MODS/CAR.DAT" in x for x in lines)
             with core.Disc(folder) as f:
                 assert f.applied
                 values = dict(f.values)
@@ -139,6 +155,8 @@ def test_folder_end_to_end(tmp_path):
             assert core.validate(src, folder, log=quiet)
             with core.Disc(folder) as f:
                 assert f.values[name] == pytest.approx(values[name])
+                assert f.img.read_file(replaced) == b"replaced by another mod"
+                assert f.img.read_file("/MODS/CAR.DAT") == b"added"
         finally:
             shutil.rmtree(folder, ignore_errors=True)
 
@@ -187,3 +205,82 @@ def test_gui_folder_flow(tmp_path, monkeypatch):
         if log.file:
             log.file.close()
         shutil.rmtree(folder, ignore_errors=True)
+
+
+@needs_iso
+def test_other_mods_in_the_folder(tmp_path, monkeypatch):
+    """An ISO saved into a folder that already has the game: another mod's texts and textures there are kept (the mod
+    is added on top, as when the folder is opened); a changed executable makes it refuse."""
+    from chainkit import strtable
+    src = ISOS[0]
+    folder = _mini_folder(src, str(tmp_path / "game"))
+    monkeypatch.setattr(hostfs, "extract", lambda *a, **k: 0)          # the quick test has no whole game folder
+    with core.Disc(src) as d:
+        p = assets.STRING_FILES[d.langs[0]]
+        t = strtable.StringTable(d.img.read_file(p))
+        h = sorted(t.entries)[0]
+        t.entries[h] = "Text Mod"
+        txd = bytearray(d.img.read_file(assets.GLOBAL_TXD))
+        ro, rs = assets.txd_records(bytes(txd))[assets.TARGET]
+        mod_at = 0x40 if not ro <= 0x40 < ro + rs else ro + rs        # a byte outside the arrow's texture
+        txd[mod_at] ^= 0xFF
+        elf0 = d.elf
+    hostfs.write_files(folder, {p: t.build(), assets.GLOBAL_TXD: bytes(txd), "/MODS/EXTRA.DAT": b"x"})
+    logs = []
+    core.save(src, folder, None, None, logs.append, to_folder=True)
+    with core.Disc(folder) as f:
+        assert f.applied and f.arrow_art == "chainkit"
+        texts = strtable.StringTable(f.img.read_file(p))
+        assert texts.entries[h] == "Text Mod" and assets.strings_present(f.img.read_file(p), d.langs[0])
+        assert f.img.read_file(assets.GLOBAL_TXD)[mod_at] == txd[mod_at]
+        assert f.img.read_file("/MODS/EXTRA.DAT") == b"x"
+    assert any("kept another mod's changes" in m for m in logs)
+    with pytest.raises(core.KitError, match="already has changes"):     # now the executable has ChainKit
+        core.save(src, folder, None, None, quiet, to_folder=True)
+    values = settings.check(None)
+    name = next(k for k in settings.TYPES if settings.TYPES[k] == "f")
+    values[name] = values[name] * 2 + 1
+    core.save(folder, folder, values, None, quiet)                     # the folder saved into itself keeps them too
+    with core.Disc(folder) as f:
+        assert strtable.StringTable(f.img.read_file(p)).entries[h] == "Text Mod"
+        assert f.img.read_file(assets.GLOBAL_TXD)[mod_at] == txd[mod_at]
+    # another tool's change in the executable: the ISO is refused, with the way forward
+    hostfs.write_files(folder, {core.boot_elf(hostfs.FolderImage(folder)): elf0[:-4] + b"\1\2\3\4"})
+    with pytest.raises(core.KitError, match="open this folder in step 1"):
+        core.save(src, folder, None, None, quiet, to_folder=True)
+
+
+@needs_iso
+def test_folders_made_by_other_tools(tmp_path):
+    """Lower-case names, the user's own ISO next to the files (Nahelam's guide), the game one level down, version
+    numbers in names, an incomplete extraction."""
+    src = ISOS[0]
+    folder = _mini_folder(src, str(tmp_path / "game"))
+    for root, dirs, files in os.walk(folder, topdown=False):             # lower-case names, as some extractors do
+        for n in files + dirs:
+            os.rename(os.path.join(root, n), os.path.join(root, n.lower()))
+    with open(os.path.join(folder, "Burnout Revenge (Europe).iso"), "wb") as f:
+        f.write(b"\0" * 4096)
+    logs = []
+    core.save(folder, folder, None, None, logs.append, to_folder=True)
+    with core.Disc(folder) as f:
+        assert f.applied
+    names = [n for _, ds, fs in os.walk(folder) for n in ds + fs]
+    assert not [n for n in names if n != n.lower() and not n.endswith(".iso")]          # no second copies
+    assert any("Burnout Revenge (Europe).iso" in m and "(HostFS).iso" in m for m in logs)
+    with pytest.raises(core.KitError, match="subfolder"):
+        core.folder_plan(src, str(tmp_path))
+    os.rename(os.path.join(folder, "system.cnf"), os.path.join(folder, "system.cnf;1"))
+    with pytest.raises(core.KitError, match="version number"):
+        core.Disc(folder)
+    with pytest.raises(core.KitError, match="version number"):
+        core.folder_plan(src, folder)
+
+
+@needs_iso
+def test_incomplete_folder(tmp_path, monkeypatch):
+    folder = _mini_folder(ISOS[0], str(tmp_path / "game"))
+    monkeypatch.setattr(core, "REQUIRED", {"TRACKS": 5, "/IOP/GTFSHOST.IRX": 1})
+    with pytest.raises(core.KitError, match="incompletely extracted") as e:
+        core.Disc(folder)
+    assert "TRACKS (missing)" in str(e.value) and "IOP/GTFSHOST.IRX" in str(e.value)
