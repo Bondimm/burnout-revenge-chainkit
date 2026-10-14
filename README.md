@@ -3,7 +3,7 @@
 **Burnout Dominator's supercharge and Burnout chain in Burnout Revenge.** Fill your boost bar, it turns blue
 (*SUPERCHARGE READY!*), boost it empty while you drive well, and it refills itself: *BURNOUT!*, *BURNOUT! x2*,
 *x3* … up to *BURNOUT DOMINATION!* ChainKit writes a new disc image of your own Burnout Revenge with this rule
-set built in — and lets you tune every part of it.
+set built in — or a PCSX2 cheat, or a game folder for PCSX2 — and lets you tune every part of it.
 
 > **Unofficial fan-made tool.** Not affiliated with, endorsed or sponsored by Electronic Arts Inc. or Criterion
 > Games. You need **your own copy** of the game. See [Legal](#legal) before you use or share anything.
@@ -11,7 +11,12 @@ set built in — and lets you tune every part of it.
 - Works with your own disc image of **Burnout Revenge for PlayStation 2**:
   - Europe / PAL — `SLES-53507`
   - USA / NTSC — `SLUS-21242`
-- Your image is **only read, never modified**; ChainKit writes a **new** `.iso`.
+- Your image is **only read, never modified**. ChainKit makes one of three things (see
+  [New ISO, PCSX2 cheat or HostFS folder?](#new-iso-pcsx2-cheat-or-hostfs-folder)):
+  - a **new** `.iso` (PCSX2 or a real PS2),
+  - a **PCSX2 cheat** (`.pnach`, a small text file — no new ISO),
+  - a **PCSX2 HostFS folder** with the game's files ([below](#pcsx2-hostfs-folder-no-new-iso)), where later
+    changes take seconds.
 - **Burnout Dominator is optional — you do not need it.** By default the arrows are **ChainKit's arrow**:
   Revenge's own chevron slash, repainted so it shows up clearly (made on your computer from your own Revenge disc).
   If you like, use the real Dominator arrow art instead, taken from **your own** Burnout Dominator disc image. The
@@ -19,7 +24,8 @@ set built in — and lets you tune every part of it.
 - **Every rule is a setting** — per game mode, per driving action, colours, pop-ups, sounds — with presets
   (*Default (tested)*, *Dominator rules*, *Easy*, *Hard*). Open an image ChainKit made to change its settings
   later, without starting over.
-- Works together with **MusicKit** (run MusicKit first).
+- Works together with [**MusicKit**](https://github.com/Bondimm/burnout-revenge-musickit), **in either order** —
+  on the same ISO chain or in the same HostFS folder (see [Combining mods](#combining-mods)).
 - The new image keeps the game's PCSX2 CRC (`7E83CC5B` Europe, `D224D348` USA), so **PCSX2 still recognises the
   game and applies its patches** (widescreen etc.).
 - **Tested in PCSX2** with the default settings on the European version (races, Road Rage, Burning Lap). The USA
@@ -49,7 +55,8 @@ set built in — and lets you tune every part of it.
 ### Step 1 — Select your Burnout Revenge ISO
 Click **Browse…** (or drop the `.iso` on the window). ChainKit tells you what is on it: the original game,
 MusicKit songs — or the Burnout Chain mod itself (then its settings are loaded, see
-[Change the settings later](#change-the-settings-later)).
+[Change the settings later](#change-the-settings-later)). **Folder...** opens a PCSX2 HostFS game folder instead
+(made by ChainKit or MusicKit) — see [PCSX2 HostFS folder](#pcsx2-hostfs-folder-no-new-iso).
 
 ### Step 2 — Arrow art (optional)
 **You can skip this step.** It only changes how the arrows look — the gameplay is the same. Without it the
@@ -69,33 +76,40 @@ fill*, *Arrows* and *Display and sound*. Hover over any setting for an explanati
 settings turn orange. Start from a preset and change single settings if you like. See the
 [settings guide](#settings-guide).
 
-### Step 4 — Save: new ISO or PCSX2 cheat
-Choose what to make (see [ISO or PCSX2 cheat?](#iso-or-pcsx2-cheat)):
+### Step 4 — Save: new ISO, PCSX2 cheat or HostFS folder
+Choose what to make (see [New ISO, PCSX2 cheat or HostFS folder?](#new-iso-pcsx2-cheat-or-hostfs-folder)):
+
+![Save: new ISO, PCSX2 cheat or HostFS folder](docs/images/chainkit_save_types.png)
 
 - **Mod the ISO** — choose where to save it and click **Save new ISO**.
 - **PCSX2 cheat (.pnach)** — choose a folder (the ChainKit folder by default; **Use PCSX2 cheats folder** appears
   when ChainKit finds one) and click **Save PCSX2 cheat**. See [Install the cheat](#install-the-pcsx2-cheat).
+- **Folder for PCSX2 HostFS** — choose an empty folder (or open a game folder in step 1) and click **Save to
+  folder**. See [PCSX2 HostFS folder](#pcsx2-hostfs-folder-no-new-iso).
 
-For the new ISO: ChainKit writes the new image and then **checks** it: every file
+For the new ISO (and the folder): ChainKit writes it and then **checks** it: every file
 it did not change is compared with your ISO byte by byte, the PCSX2 CRC, the new texts and the arrow texture are
 verified. The log shows the result (*RESULT: OK*). Load the new `.iso` in PCSX2 or burn it for your PS2.
 
 ![Saved and checked](docs/images/chainkit_saved.png)
 
-## ISO or PCSX2 cheat?
+## New ISO, PCSX2 cheat or HostFS folder?
 
-| | Mod the ISO | PCSX2 cheat (.pnach) |
-|---|---|---|
-| Plays on | PCSX2 **and** a real PS2 (burned disc / OPL) | PCSX2 only |
-| Your game files | a new `.iso` next to yours (~4 GB) | none changed - a ~100 KB text file |
-| Switch the mod off | play your original ISO | untick it in PCSX2's cheat list (takes effect at the next boot) |
-| Arrow art | ChainKit's arrow, or Dominator's from your Dominator disc | the same (the cheat file then contains the arrow made from your disc: personal use only, do not share it) |
-| Pop-up texts | in every language of your disc | English |
-| Settings | all | all (same code, same settings) |
+| | Mod the ISO | PCSX2 cheat (.pnach) | HostFS folder |
+|---|---|---|---|
+| Plays on | PCSX2 **and** a real PS2 (burned disc / OPL) | PCSX2 only | PCSX2 only (needs Nahelam's HostFS cheat) |
+| Your game files | a new `.iso` next to yours (~4 GB) | none changed - a ~100 KB text file | the game's files in a folder (~2.7 GB, copied once) |
+| Change settings later | open the new ISO, save another one | make a new cheat from your ISO | open the folder, save into it (seconds) |
+| Switch the mod off | play your original ISO | untick it in PCSX2's cheat list (takes effect at the next boot) | play your original ISO (untick the HostFS cheat) |
+| Arrow art | ChainKit's arrow, or Dominator's from your Dominator disc | the same (the cheat file then contains the arrow made from your disc: personal use only, do not share it) | the same as the ISO |
+| Pop-up texts | in every language of your disc | English | in every language of your disc |
+| With MusicKit | either order (see [Combining mods](#combining-mods)) | on a MusicKit ISO or folder | either order, in the same folder |
+| Settings | all | all (same code, same settings) | all |
 
-Both are the same mod: the cheat writes exactly the memory the modded ISO has (checked by the tests). Differences:
-the pop-up texts come from the cheat itself (English), and the arrow image is copied from the cheat into the
-game's unused online voice-chat icon in memory (the ISO version replaces it in the disc's texture file).
+All three are the same mod: the cheat writes exactly the memory the modded ISO has (checked by the tests).
+Differences: the cheat's pop-up texts come from the cheat itself (English), and its arrow image is copied from the
+cheat into the game's unused online voice-chat icon in memory (the ISO and the folder replace it in the game's
+texture file).
 
 ### Install the PCSX2 cheat
 1. Save the cheat with ChainKit (window: **PCSX2 cheat (.pnach)**; command line: `pnach --iso "Burnout Revenge.iso"`).
@@ -110,7 +124,8 @@ game's unused online voice-chat icon in memory (the ISO version replaces it in t
 4. **Boot the game** (or restart it): the cheat is written once when the game starts.
 
 Notes: use your ISO **without** ChainKit (never the cheat together with a ChainKit ISO - ChainKit refuses to make a
-cheat from such an ISO). MusicKit ISOs are fine. Other cheats: `pnach-check` (or `pnach --check-with`)
+cheat from such an ISO). MusicKit ISOs and folders are fine (make the cheat from them, e.g.
+`pnach --iso "<folder>"`). Other cheats: `pnach-check` (or `pnach --check-with`)
 lists memory both write - none with Nehalem's Single Event Mod. Other versions of the game (Japan, other
 executables) are not supported.
 
@@ -137,14 +152,13 @@ A third way for PCSX2: save the mod into a **folder** instead of a new disc imag
 loads the game's files straight from that folder. It is the same mod as the new ISO (pop-up texts in every
 language of your disc, ChainKit's or Dominator's arrow):
 
-- the first save copies the game's files from your ISO into the folder (once, about 2.5 GB);
+- the first save copies the game's files from your ISO into the folder (once, about 2.7 GB);
 - later saves (other settings) only rewrite the files ChainKit changes — the game executable, and the arrow art if
   you add Dominator's — no 4 GB ISO each time;
-- **with MusicKit:** save with one kit, then open **that folder** in the other kit (step 1, **Folder...**) and
-  save there — in either order. Both kits keep each other's changes. ChainKit refuses to save your ISO over a
-  folder that already has MusicKit songs or the mod (that would lose them).
+- MusicKit can save into the same folder, in either order (see [Combining mods](#combining-mods));
+- **PCSX2 only** — a folder does not work on a real PS2.
 
-PCSX2 only (not a real PS2). The Criterion games need a small PCSX2 cheat to read from a folder:
+The Criterion games need a small PCSX2 cheat to read from a folder:
 **Nahelam's HostFS patches** ([PCSX2-HostFS-Patches](https://github.com/Nahelam/PCSX2-HostFS-Patches), folder
 [Criterion Games](https://github.com/Nahelam/PCSX2-HostFS-Patches/tree/main/Criterion%20Games)) — thanks to
 [Nahelam](https://github.com/Nahelam) for making them. ChainKit does not include that cheat; you download it once.
@@ -152,13 +166,16 @@ PCSX2 only (not a real PS2). The Criterion games need a small PCSX2 cheat to rea
 ### Save into a folder
 1. Select your ISO in step 1 — or a game folder with **Folder...** (made by MusicKit or ChainKit; it is then saved
    into itself).
-2. In the Save step choose **Folder for PCSX2 HostFS** and pick an **empty folder** (not needed for a folder from step 1).
+2. In the Save step choose **Folder for PCSX2 HostFS** and **Browse...** to an **empty folder** (not needed for a
+   folder from step 1).
 3. Click **Save to folder**. ChainKit writes the files and a small boot image `Burnout Revenge (HostFS).iso` into
    the folder (it holds only `SYSTEM.CNF` and the game executable and is rebuilt on every save), then checks the
    folder like a new ISO.
 
 To change the settings later, open the folder in step 1 with **Folder...** (or click *Open this folder here* after
 saving), change them and save again. Your ISO is never changed.
+
+![After saving into a folder: open it again, and how to play it in PCSX2](docs/images/chainkit_hostfs.png)
 
 ### Play it in PCSX2 (once)
 1. Download the cheat for your version from
@@ -168,56 +185,60 @@ saving), change them and save again. Your ISO is never changed.
    - USA / NTSC (SLUS-21242): `SLUS-21242_D224D348_hostfs.pnach`
 
    Put it into PCSX2's `cheats` folder (PCSX2: *Tools → Open Data Directory*).
-2. Add your folder to PCSX2's game list (*Settings → Game List → Add...*, without recursive scan). It shows
-   `Burnout Revenge (HostFS).iso`.
+2. Add your folder to PCSX2's game list (*Settings → Game List → Add...*, without recursive scan). The game appears
+   as **Burnout Revenge**, only a few MB in size: that is the boot image `Burnout Revenge (HostFS).iso`.
 3. Right-click it → *Properties*: on the *Emulation* page switch on **Enable Host Filesystem**; on the *Cheats* page
-   switch on **Enable Cheats** and tick **HostFS**.
-4. Start `Burnout Revenge (HostFS).iso`.
+   switch on **Enable Cheats** and tick **HostFS** (not *Burnout Chain (ChainKit)*: the folder already has the mod).
+4. Start it from the game list.
 
-The game CRC stays the same, so PCSX2's widescreen patches still apply (do not use the ChainKit *cheat* on top:
-the folder already has the mod). ChainKit shows these steps after saving, too. As Nahelam notes, with the HostFS
-cheat the network configuration cannot be started from the game (save your network settings on the memory card
-first if you play online).
+![PCSX2: the folder in the game list, Enable Host Filesystem, Enable Cheats + HostFS](docs/images/pcsx2_hostfs.png)
 
-**Stop the game before you save** into its folder: the running game keeps its files open. On Windows ChainKit
-then refuses to save (nothing is changed) and tells you why; restart the game after saving.
+The game CRC stays the same, so PCSX2's widescreen patches still apply. ChainKit shows these steps after saving,
+too. As Nahelam notes, with the HostFS cheat the network configuration cannot be started from the game (save your
+network settings on the memory card first if you play online).
 
-**Linux:** the game asks for its files in mixed letter case while the disc stores them in upper case. That only
-works in a case-insensitive folder — on ext4 for example an empty folder with casefold switched on (`chattr +F`,
-needs a file system created with casefold support). ChainKit warns when the folder is case-sensitive but still lets
-you save and try. Windows and macOS (default file system) need nothing special.
+- **Stop the game before you save** into its folder: the running game keeps its files open. On Windows ChainKit
+  then refuses to save (nothing is changed) and tells you why; restart the game after saving.
+- **Linux:** the game asks for its files in mixed letter case while the disc stores them in upper case. That only
+  works in a case-insensitive folder — on ext4 for example an empty folder with casefold switched on (`chattr +F`,
+  needs a file system created with casefold support). ChainKit warns when the folder is case-sensitive but still
+  lets you save and try. Windows and macOS (default file system) need nothing special.
 
-### Other mods in the same folder
+### Combining mods
 
-- **MusicKit + ChainKit:** both kits save into the same folder, **in either order**: save with one kit, then open
-  the folder in the other kit (step 1, **Folder...**, or `--iso "<folder>"`) and save there. Saving again later
-  in either kit keeps the other kit's changes (songs, supercharge settings, pop-up texts, arrow).
-- **Saving your ISO into a folder that already has the game** works while the game executable there is still the
-  ISO's (ChainKit then adds the mod on top of the folder's texts and textures). When the executable was changed
-  (MusicKit songs, the mod itself or another mod), ChainKit refuses (nothing is changed) and tells you to open
-  the folder instead (or to pick an empty folder to start again from your ISO).
-- **Other people's file mods** (replaced cars, textures, videos, extra files) are never touched: ChainKit writes only
-  the files it manages. Texts other mods changed in the game's text files are kept too. `validate` lists such
-  files as notes, not as errors.
-- **PCSX2 cheats** (widescreen and other patches) keep working: the game CRC stays the same. The per-game
-  *HostFS* cheat is only for the folder — **untick it** before you start a normal ISO of the same game
-  (with it on, the ISO does not start).
-- ChainKit's **PCSX2 cheat** also works with a MusicKit folder (make the cheat from that folder:
-  `pnach --iso "<folder>"`); do not use it on a folder that already has the mod.
-- **Folders made by other tools** work: a folder extracted with 7-Zip, or set up as in Nahelam's guide (your own ISO
-  inside the folder). Start `Burnout Revenge (HostFS).iso` then — your own ISO in the folder still starts the game's
-  original executable, without ChainKit's changes to it. ChainKit explains what to do when names still end in `;1`
-  (extract again with 7-Zip), when you picked the folder above the game's files, or when files are missing (an
-  unfinished extraction: save from your ISO into the folder and the missing files are copied).
+- **ChainKit + MusicKit, in either order.** Save with one kit, then open *that* new ISO or folder in the other kit
+  and save there (a folder: step 1 **Folder...**, command line `--iso "<folder>"`). Saving again later in either
+  kit keeps the other kit's changes (songs, supercharge settings, pop-up texts, arrow). Older MusicKit versions
+  (before October 2026) cannot open an image that already has ChainKit — update MusicKit, or run MusicKit first.
+- **ChainKit's PCSX2 cheat** works with a MusicKit ISO or folder too (make the cheat from it:
+  `pnach --iso "<folder>"`). Never use it on an ISO or folder that already has the mod.
+- **Saving again:** always open the folder (not your ISO) and save — only the changed files are rewritten.
+- **Your ISO into a folder that already has the game** works while the game executable there is still the ISO's
+  (ChainKit then adds the mod on top of the folder's texts and textures). When the executable was changed
+  (MusicKit songs, the mod itself or another mod), ChainKit refuses (nothing is changed) and tells you to open the
+  folder instead — or pick an empty folder to start again from your ISO.
+- **Other mods are kept:** other people's file mods (replaced cars, textures, videos, extra files) are never
+  touched — ChainKit writes only the files it manages — and texts other mods changed in the game's text files stay
+  too. `validate` lists such files as notes, not as errors.
+- **PCSX2 cheats and patches** (widescreen etc.) keep working: the game CRC stays the same. The *HostFS* cheat is
+  only for the folder — **untick it** before you start a normal ISO of the same game (with it on, the ISO does not
+  start).
 
-Tested in PCSX2 2.8 (Europe discs, Burnout Revenge also USA): songs that exist only in the folder play from the folder
-in menus and races (the boot image holds only `SYSTEM.CNF` and the executable); MusicKit + ChainKit in both orders
-with supercharge, arrows and SUPERCHARGE LOST, a memory card save and the widescreen patch; other mods' files and
-texts stayed unchanged through every save.
+<details>
+<summary><b>Folders made by other tools (7-Zip, Nahelam's guide) and what was tested</b></summary>
 
-Command line ([optional](#command-line-optional)): `build --iso "Burnout Revenge (Europe).iso" --folder "<folder>"`
-saves into a folder; `build --iso "<folder>"` puts the mod into a folder (e.g. MusicKit's) and
-`tune "<folder>" "<folder>" --set ...` changes its settings.
+- A folder extracted with 7-Zip, or set up as in Nahelam's guide (your own ISO inside the folder), works. Start
+  `Burnout Revenge (HostFS).iso` then — your own ISO in the folder still starts the game's original executable,
+  without ChainKit's changes to it.
+- ChainKit explains what to do when names still end in `;1` (extract again with 7-Zip), when you picked the folder
+  above the game's files, or when files are missing (an unfinished extraction: save from your ISO into the folder
+  and the missing files are copied).
+- Tested in PCSX2 2.8 (Europe discs, Burnout Revenge also USA): songs that exist only in the folder play from the
+  folder in menus and races (the boot image holds only `SYSTEM.CNF` and the executable); MusicKit + ChainKit in
+  both orders with supercharge, arrows and SUPERCHARGE LOST, a memory card save and the widescreen patch; other
+  mods' files and texts stayed unchanged through every save.
+
+</details>
 
 ## Settings guide
 
@@ -290,19 +311,31 @@ loads it too.
 | What | Details |
 |---|---|
 | Operating system | Windows 10 or 11 (64-bit), macOS 14 Sonoma or newer (Apple Silicon or Intel), or 64-bit Linux (x86_64 or aarch64, glibc 2.28+; tested on Ubuntu 22.04 / 24.04) |
-| Python | any Python 3.12 or newer, or none at all — the setup picks an installed Python for which every package is available ready-made, or downloads a private Python 3.13 into the `.python` folder (no admin rights needed, about 100 MB) |
+| Python | Python 3.12 – 3.15 (64-bit), or none at all: the setup uses an installed Python for which every package is available ready-made, otherwise it downloads a private Python 3.13 into the `.python` folder (no admin rights needed, about 100 MB) |
 | Python packages | installed automatically by `setup.bat` / `setup.command` / `setup.sh` into a private `.venv`: numpy, glfw, PyOpenGL, imgui-bundle, Pillow, pytest (see [requirements.txt](requirements.txt)) |
 | Graphics | any GPU with OpenGL 3.3 (for the ChainKit window) |
-| Disk space | about 4.5 GB free for the new disc image plus ~300 MB for the Python packages |
+| Disk space | about 4.5 GB free for the new disc image (about 3 GB for a HostFS folder, almost nothing for a PCSX2 cheat) plus ~300 MB for the Python packages |
 | The game | your own disc image (.iso) of Burnout Revenge for PS2: Europe `SLES-53507` or USA `SLUS-21242` |
 | Optional | your own disc image of Burnout Dominator (PS2) for the arrow art |
 | Internet | only once, during `setup.bat` / `setup.command` / `setup.sh` |
 
+### What the setup does
+The setup scripts never compile anything and change nothing outside the ChainKit folder:
+
+1. They look for an installed 64-bit Python (3.12 – 3.15) and use the first one for which **every** package is
+   available ready-made, in a private environment `.venv`.
+2. If there is no Python, or none can install the packages (e.g. a brand-new Python 3.15 before the packages have
+   caught up), they download a **private Python 3.13** into the `.python` folder with
+   [uv](https://astral.sh/uv) (download checked against a checksum) and use that one.
+
+Run the setup again at any time: it updates the packages, or rebuilds `.venv` if it no longer works (e.g. after
+you removed the Python it was made with). `CHAINKIT_PRIVATE_PYTHON=1` makes it skip the installed Pythons.
+
 ## Installation (Windows 10 / 11)
 
-1. Optional: install **Python 3.12 or newer** from <https://www.python.org/downloads/> (tick *"Add python.exe to PATH"*).
-   Without it, or when your Python is too new for some packages (e.g. a fresh 3.15), `setup.bat` downloads a
-   private Python into the `.python` folder by itself.
+1. Optional: install **Python 3.12 – 3.15** from <https://www.python.org/downloads/> (tick *"Add python.exe to
+   PATH"*). Without it, `setup.bat` downloads a private Python by itself (see
+   [What the setup does](#what-the-setup-does)).
 2. Download this repository (green **Code** button → *Download ZIP*) and unpack it, or `git clone` it.
 3. Double-click **`setup.bat`** once. It creates a private Python environment in `.venv`. Nothing is installed
    system-wide.
@@ -312,9 +345,9 @@ loads it too.
 
 For Apple Silicon (M1 and newer) and Intel Macs with macOS 14 Sonoma or newer.
 
-1. Optional: install **Python 3.12 or newer** from <https://www.python.org/downloads/macos/> (or with
-   [Homebrew](https://brew.sh): `brew install python`). Without it, or when your Python is too new for some
-   packages, `setup.command` downloads a private Python into the `.python` folder by itself.
+1. Optional: install **Python 3.12 – 3.15** from <https://www.python.org/downloads/macos/> (or with
+   [Homebrew](https://brew.sh): `brew install python`). Without it, `setup.command` downloads a private Python by
+   itself (see [What the setup does](#what-the-setup-does)).
 2. Download this repository (green **Code** button → *Download ZIP*) and unpack it, or `git clone` it.
 3. Double-click **`setup.command`** once. It opens a Terminal window and creates a private Python environment in
    `.venv`. Nothing is installed system-wide.
@@ -334,9 +367,9 @@ For Apple Silicon (M1 and newer) and Intel Macs with macOS 14 Sonoma or newer.
 For 64-bit Linux on x86_64 or aarch64 (glibc 2.28 or newer; Alpine / musl is not supported). Tested in CI on
 Ubuntu 22.04 and 24.04 (x86_64); other distributions (Debian, Fedora, Arch, openSUSE, Mint, ...) should work the same way.
 
-1. Install the system packages. Python is optional: `./setup.sh` uses an installed Python 3.12 or newer (on
-   Debian / Ubuntu with its separate `venv` package) and otherwise downloads a private Python into the `.python`
-   folder by itself:
+1. Install the system packages. Python is optional: `./setup.sh` uses an installed Python 3.12 – 3.15 (on
+   Debian / Ubuntu with its separate `venv` package) and otherwise downloads a private Python by itself (see
+   [What the setup does](#what-the-setup-does)):
    - Debian / Ubuntu / Mint: `sudo apt install python3 python3-venv python3-pip libgl1 libegl1 libxkbcommon0 zenity`
    - Fedora: `sudo dnf install python3 python3-pip mesa-libGL mesa-libEGL libxkbcommon zenity`
    - Arch / Manjaro: `sudo pacman -S python python-pip mesa libglvnd libxkbcommon zenity`
@@ -370,6 +403,9 @@ in a terminal).
 | check a new image | `validate "Burnout Revenge (Europe).iso" "Burnout Revenge (Burnout Chain).iso"` |
 | PCSX2 cheat instead of an ISO | `pnach --iso "Burnout Revenge (Europe).iso" --out-dir cheats` (`--force` replaces an existing file; give `--iso` twice for Europe + USA; `--region pal\|usa\|both`) · or `build --output-type pnach ...` |
 | other cheats writing the same memory? | `pnach-check SLES-53507_7E83CC5B_chainkit.pnach --with OTHER.pnach` (also `pnach ... --check-with OTHER.pnach`) |
+| PCSX2 HostFS folder instead of an ISO | `build --iso "Burnout Revenge (Europe).iso" --folder "<folder>"` |
+| put the mod into an existing game folder (e.g. MusicKit's) | `build --iso "<folder>"` (saved into itself) |
+| change the settings of a folder | `tune "<folder>" "<folder>" --set drain_mult=2` |
 
 On/off settings have their own names, so no bit masks are needed: `--set only_boost_while_held=off`, `--set debug_boost=on`, `--set mode_traffic_attack=off` (`settings` lists every name).
 
@@ -382,11 +418,11 @@ MusicKit songs are kept, and every other file is byte-identical to your ISO.
 
 ## Works with MusicKit
 
-- **MusicKit:** run [MusicKit](https://github.com/Bondimm/burnout-revenge-musickit) and ChainKit in either order,
-  each on the other's new image (or HostFS folder). ChainKit uses the top of the free space that MusicKit opens
-  for its song list; both fit. Older MusicKit versions (before October 2026) cannot open an image that already
-  has ChainKit — update MusicKit, or run MusicKit first. ChainKit shows a clear message if an image has a song
-  list broken by an old tool run after ChainKit.
+Run [MusicKit](https://github.com/Bondimm/burnout-revenge-musickit) and ChainKit **in either order**, each on the
+other's new image or in the same HostFS folder (see [Combining mods](#combining-mods)). ChainKit uses the top of
+the free space that MusicKit opens for its song list; both fit. ChainKit shows a clear message if an image has a
+song list broken by an old tool run after ChainKit.
+
 ## FAQ
 
 **PCSX2 says the dump is not in the redump database / the MD5 is red.** That is expected for *any* modified disc
@@ -409,13 +445,20 @@ online races always play like the original.
 arrow (Revenge's chevron, repainted) and everything else is the same.
 
 **Can I change the settings again later?** Yes — open the image ChainKit made, change the settings, save a new
-image. Your Dominator arrow stays.
+image (a HostFS folder: open it and save into it). Your Dominator arrow stays. A PCSX2 cheat is simply made again
+from your ISO.
 
 **Does it work with the USA version of Burnout Revenge?** Yes — Europe (`SLES-53507`) and USA (`SLUS-21242`) are
 both supported. The USA version has English texts only, so the pop-ups are in English. Other versions (Japan,
 Platinum re-releases with a different executable) are refused with a message.
 
 **Will my save game still work?** Yes. ChainKit changes nothing that is saved on the memory card.
+
+**My normal ISO does not start any more.** The *HostFS* cheat is still ticked for this game: untick it in the
+game's *Properties → Cheats* (it is only for a HostFS folder).
+
+**Can I have MusicKit songs too?** Yes, in any order: open ChainKit's new ISO or folder in MusicKit and save there,
+or the other way round (see [Combining mods](#combining-mods)).
 
 ## For modders
 
@@ -440,11 +483,16 @@ set CHAINKIT_DOMINATOR=D:\path\to\Burnout Dominator.iso  (optional)
 ## Other Burnout kits
 
 - [Burnout Revenge MusicKit](https://github.com/Bondimm/burnout-revenge-musickit) — add your own songs to the EA
-  Trax soundtrack of Burnout Revenge (Europe and USA).
+  Trax soundtrack of Burnout Revenge (Europe and USA); works together with ChainKit.
 - [Burnout Dominator MusicKit](https://github.com/Bondimm/burnout-dominator-musickit) — the same for Burnout
   Dominator (PS2).
 - [Burnout 3: Takedown MusicKit](https://github.com/Bondimm/burnout3-takedown-musickit) — the same for Burnout 3:
   Takedown (PS2).
+
+## Thanks
+
+- [Nahelam](https://github.com/Nahelam) for the
+  [PCSX2 HostFS patches](https://github.com/Nahelam/PCSX2-HostFS-Patches) that make the folder mode possible.
 
 ## Legal
 
@@ -464,7 +512,8 @@ set CHAINKIT_DOMINATOR=D:\path\to\Burnout Dominator.iso  (optional)
   Burnout Dominator image into your own Burnout Revenge image on your computer. ChainKit does not bypass any copy
   protection; it only edits a copy of your own image.
 - **Do not share modified disc images.** Disc images contain the games, which are copyrighted by Electronic Arts.
-  Uploading or distributing them — modified or not — is not allowed. Share your settings files instead.
+  Uploading or distributing them — modified or not — is not allowed; the same goes for HostFS game folders (they
+  hold the game's files). Share your settings files instead.
 - **No warranty.** The software is provided "as is", without warranty of any kind (see [LICENSE](LICENSE)).
   Use it at your own risk; keep a backup of your original image and your memory card saves.
 - **Licence.** The source code is released under the MIT License. The licence applies only to the code in this
