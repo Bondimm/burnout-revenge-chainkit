@@ -967,6 +967,51 @@ class _Ui:
 
 
 # ---------------------------------------------------------------------------------------------- window
+class NoOpenGL(RuntimeError):
+    """The graphics driver offers no usable OpenGL; the message tells the user what to do."""
+
+
+def _open_window(size, title):
+    """Create the window and return (window, renderer class). OpenGL 3.3 core first (the only modern profile macOS
+    offers), then plain OpenGL 3.0 for older GPUs (2nd-gen Intel HD Graphics stops at 3.1).
+    CHAINKIT_OPENGL=3.0 skips 3.3."""
+    import glfw
+    from OpenGL import GL as gl
+    from imgui_bundle.python_backends.glfw_backend import GlfwRenderer
+
+    class LegacyRenderer(GlfwRenderer):
+        VERTEX_SHADER_SRC = GlfwRenderer.VERTEX_SHADER_SRC.replace("#version 330", "#version 130")
+        FRAGMENT_SHADER_SRC = GlfwRenderer.FRAGMENT_SHADER_SRC.replace("#version 330", "#version 130")
+
+    errors = []
+    glfw.set_error_callback(lambda code, desc: errors.append(desc.decode("utf-8", "replace")
+                                                             if isinstance(desc, bytes) else str(desc)))
+    if not glfw.init():
+        raise NoOpenGL("Could not start the window system (GLFW): %s" % "; ".join(errors))
+    tries = [((3, 3), True, GlfwRenderer), ((3, 0), False, LegacyRenderer)]
+    if os.environ.get("CHAINKIT_OPENGL") == "3.0":
+        tries = tries[1:]
+    for (major, minor), core, renderer in tries:
+        glfw.default_window_hints()
+        glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, major)
+        glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, minor)
+        if core:
+            glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
+            glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, gl.GL_TRUE)
+        window = glfw.create_window(*size, title, None, None)
+        if window:
+            glfw.set_error_callback(None)
+            return window, renderer
+    glfw.terminate()
+    raise NoOpenGL(
+        "ChainKit needs OpenGL 3.0 or newer for its window, and this PC's graphics driver offers none.\n\n"
+        "Fix: install the graphics driver for your GPU (Windows: Settings > Windows Update > Advanced options > "
+        "Optional updates, or the driver from Intel / AMD / NVIDIA), restart and try again. Remote Desktop and "
+        "virtual machines often have no OpenGL at all.\n\n"
+        "Meanwhile the command-line version (chainkit-cli) does the same work without a window.\n\n"
+        "Details: %s" % ("; ".join(dict.fromkeys(errors)) or "no details"))
+
+
 def _fatal(msg):
     try:
         sys.stderr.write(msg + "\n")   # under pythonw there is no console (sys.stderr is None)
@@ -997,6 +1042,13 @@ def main(shot=None, demo=None, size=None):
     log = Log(os.path.join(app_dir(), "gui.log"))
     try:
         return _run(saved, log, shot, size)
+    except NoOpenGL as e:
+        log(str(e), "error")
+        if not shot:
+            _fatal(str(e))
+        else:
+            print(e)
+        return 1
     except Exception:
         tb = traceback.format_exc()
         log(tb, "error")
@@ -1011,17 +1063,8 @@ def _run(saved, log, shot, size=None):
     import glfw
     from OpenGL import GL as gl
     from imgui_bundle import imgui
-    from imgui_bundle.python_backends.glfw_backend import GlfwRenderer
 
-    if not glfw.init():
-        raise RuntimeError("could not initialise GLFW")
-    glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
-    glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
-    glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
-    glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, gl.GL_TRUE)     # required on macOS
-    window = glfw.create_window(*(size or (1400, 860)), TITLE, None, None)
-    if not window:
-        raise RuntimeError("could not create an OpenGL 3.3 window")
+    window, renderer = _open_window(size or (1400, 860), TITLE)
     glfw.make_context_current(window)
     glfw.swap_interval(1)
     imgui.create_context()
@@ -1034,7 +1077,7 @@ def _run(saved, log, shot, size=None):
     if sx and sx > 1.01 and glfw.get_framebuffer_size(window)[0] <= glfw.get_window_size(window)[0] * 1.01:
         imgui.get_style().scale_all_sizes(sx)
         imgui.get_style().font_scale_dpi = sx
-    impl = GlfwRenderer(window)
+    impl = renderer(window)
     gui = ChainKitGui(log, saved)
     if shot:
         gui.save_settings = lambda: None

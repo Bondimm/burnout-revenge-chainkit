@@ -313,7 +313,7 @@ loads it too.
 | Operating system | Windows 10 or 11 (64-bit), macOS 14 Sonoma or newer (Apple Silicon or Intel), or 64-bit Linux (x86_64 or aarch64, glibc 2.28+; tested on Ubuntu 22.04 / 24.04) |
 | Python | Python 3.12 – 3.15 (64-bit), or none at all: the setup uses an installed Python for which every package is available ready-made, otherwise it downloads a private Python 3.13 into the `.python` folder (no admin rights needed, about 100 MB) |
 | Python packages | installed automatically by `setup.bat` / `setup.command` / `setup.sh` into a private `.venv`: numpy, glfw, PyOpenGL, imgui-bundle, Pillow, pytest (see [requirements.txt](requirements.txt)) |
-| Graphics | any GPU with OpenGL 3.3 (for the ChainKit window) |
+| Graphics | any GPU with OpenGL 3.0 or newer and its driver installed (for the ChainKit window; macOS: 3.3) |
 | Disk space | about 4.5 GB free for the new disc image (about 3 GB for a HostFS folder, almost nothing for a PCSX2 cheat) plus ~300 MB for the Python packages |
 | The game | your own disc image (.iso) of Burnout Revenge for PS2: Europe `SLES-53507` or USA `SLUS-21242` |
 | Optional | your own disc image of Burnout Dominator (PS2) for the arrow art |
